@@ -8,7 +8,7 @@ import { connectToSocket, disconnectSocket } from './lib/socket';
 // =============================================
 // TIKTOK USERNAME - CHANGE THIS
 // =============================================
-const TIKTOK_USERNAME = 'amir_mansory';//'darnz_45';  // <-- CHANGE THIS
+const TIKTOK_USERNAME = 'amir_mansory';//'darnz_45'; or valery.fain14  // <-- CHANGE THIS
 // =============================================
 
 interface TikTokEvent {

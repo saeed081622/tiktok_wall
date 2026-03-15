@@ -17,3 +17,52 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+@font-face {
+  font-family: 'TikTok Sans';
+  src: url('/fonts/TikTokSans-VariableFont_opsz,slnt,wdth,wght.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Add this to your global CSS file */
+@keyframes hitWall {
+  0% {
+    opacity: 0;
+    transform: scale(3) translateY(-50px);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1) translateY(5px);
+  }
+  60% {
+    transform: scale(0.95) translateY(-2px);
+  }
+  80% {
+    transform: scale(1.02) translateY(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes explodeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(5);
+  }
+}
+
+.name-hit {
+  animation: hitWall 0.6s ease-out forwards;
+}
+
+.name-exit {
+  animation: explodeOut 0.8s ease-out forwards;
+}

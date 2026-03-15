@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { connectToSocket, disconnectSocket } from '@/app/lib/socket';
 
@@ -10,73 +10,57 @@ export default function UserPage() {
   
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
-  const [letters, setLetters] = useState<{char: string, id: number, exitX: number, exitY: number, exitRotate: number}[]>([]);
-  const [particles, setParticles] = useState<any[]>([]);
-  const [isExiting, setIsExiting] = useState(false);
+  const [animationState, setAnimationState] = useState<'none' | 'entering' | 'exiting'>('none');
+  const [showEffects, setShowEffects] = useState(false);
+  const [fontSize, setFontSize] = useState(80);
+  const textRef = useRef<HTMLDivElement>(null);
 
-  const createImpactParticles = () => {
-    const newParticles = [];
-    for (let i = 0; i < 30; i++) {
-      newParticles.push({
-        id: Date.now() + i,
-        x: 50 + (Math.random() - 0.5) * 20,
-        y: 50 + (Math.random() - 0.5) * 20,
-        vx: (Math.random() - 0.5) * 8,
-        vy: (Math.random() - 0.5) * 8 - 2,
-        size: Math.random() * 6 + 2,
-        color: `hsl(${Math.random() * 60 + 300}, 100%, 70%)`,
-        life: 1
-      });
-    }
-    setParticles(newParticles);
-    setTimeout(() => setParticles([]), 800);
+  const extractLetters = (name: string): string => {
+    if (!name) return 'GIFT';
+    const letters = name.toUpperCase().replace(/[^A-Z]/g, '');
+    return letters || 'GIFT';
   };
 
-  const testGift = () => {
-    const names = ['ALEXANDER', 'VICTORIA', 'CHRISTOPHER', 'ELIZABETH', 'JONATHAN', 'CATHERINE'];
-    const name = names[Math.floor(Math.random() * names.length)];
+  useEffect(() => {
+    if (!textRef.current || !currentGifter) return;
     
-    // Create letters with RANDOM exit directions for EACH letter
-    const letterArray = name.split('').map((char: string, i: number) => ({
-      char,
-      id: i,
-      exitX: (Math.random() - 0.5) * 800,
-      exitY: -300 - Math.random() * 300,
-      exitRotate: (Math.random() - 0.5) * 360
-    }));
+    const textElement = textRef.current;
+    const containerWidth = window.innerWidth * 0.84;
     
-    setLetters(letterArray);
-    setIsExiting(false);
-    createImpactParticles();
+    let testSize = 120;
+    textElement.style.fontSize = `${testSize}px`;
+    
+    while (textElement.scrollWidth > containerWidth && testSize > 32) {
+      testSize -= 2;
+      textElement.style.fontSize = `${testSize}px`;
+    }
+    
+    setFontSize(testSize);
+  }, [currentGifter]);
+
+  const triggerGift = (name: string) => {
+    setCurrentGifter(name);
+    setAnimationState('entering');
+    setShowEffects(true);
+    
+    // Epic 3-stage effect sequence
+    setTimeout(() => setShowEffects(false), 2000); // Effects last 2 seconds
     
     setTimeout(() => {
-      setIsExiting(true);
+      setAnimationState('exiting');
       
       setTimeout(() => {
-        setLetters([]);
-        setIsExiting(false);
+        setCurrentGifter(null);
+        setAnimationState('none');
       }, 1000);
     }, 3000);
   };
 
-  // Animate particles
-  useEffect(() => {
-    if (particles.length === 0) return;
-    
-    const interval = setInterval(() => {
-      setParticles(prev => 
-        prev.map(p => ({
-          ...p,
-          x: p.x + p.vx * 0.5,
-          y: p.y + p.vy * 0.5,
-          vy: p.vy + 0.1,
-          life: p.life - 0.02
-        })).filter(p => p.life > 0)
-      );
-    }, 30);
-    
-    return () => clearInterval(interval);
-  }, [particles]);
+  const testGift = () => {
+    const names = ['👑 ALEXANDER', '⚡ VICTORIA', '🔥 CHRISTOPHER', '💎 ELIZABETH', '🌟 JONATHAN', '✨ CATHERINE'];
+    const name = names[Math.floor(Math.random() * names.length)];
+    triggerGift(name);
+  };
 
   useEffect(() => {
     if (!testMode) return;
@@ -90,27 +74,9 @@ export default function UserPage() {
     socket.on('connect', () => socket.emit('connect-tiktok', userId));
     socket.on('tiktok-event', (event: any) => {
       if (event.type === 'gift') {
-        const name = event.nickname?.toUpperCase() || 'SOMEONE';
-        
-        const letterArray = name.split('').map((char: string, i: number) => ({
-          char,
-          id: i,
-          exitX: (Math.random() - 0.5) * 800,
-          exitY: -300 - Math.random() * 300,
-          exitRotate: (Math.random() - 0.5) * 360
-        }));
-        
-        setLetters(letterArray);
-        setIsExiting(false);
-        createImpactParticles();
-        
-        setTimeout(() => {
-          setIsExiting(true);
-          setTimeout(() => {
-            setLetters([]);
-            setIsExiting(false);
-          }, 1000);
-        }, 3000);
+        const rawName = event.nickname || 'GIFT';
+        const cleanName = extractLetters(rawName);
+        triggerGift(cleanName);
       }
     });
     return () => disconnectSocket();
@@ -133,123 +99,273 @@ export default function UserPage() {
       {/* Test button */}
       <div style={{
         position: 'fixed',
-        bottom: 20,
-        right: 20,
+        bottom: 10,
+        right: 10,
         pointerEvents: 'auto',
         zIndex: 10000,
       }}>
         <button
           onClick={() => setTestMode(!testMode)}
           style={{
-            padding: '12px 24px',
-            background: testMode ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.1)',
+            padding: '8px 16px',
+            background: testMode ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.1)',
             color: 'white',
             border: '1px solid rgba(255,255,255,0.2)',
-            borderRadius: 30,
+            borderRadius: 20,
             cursor: 'pointer',
-            fontSize: 14,
+            fontSize: '12px',
             backdropFilter: 'blur(5px)',
           }}
         >
-          {testMode ? '✨ DEMO' : '⚡ TEST'}
+          {testMode ? '✨ EPIC MODE' : '⚡ TEST'}
         </button>
       </div>
 
-      {/* Impact Particles */}
-      {particles.map(p => (
-        <div
-          key={p.id}
-          style={{
-            position: 'absolute',
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: `${p.size}px`,
-            height: `${p.size}px`,
-            background: p.color,
-            borderRadius: '50%',
-            boxShadow: `0 0 ${p.size * 4}px ${p.color}`,
-            opacity: p.life,
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        />
-      ))}
-
-      {/* Letters */}
-      {letters.length > 0 && (
+      {/* EPIC EFFECTS LAYER */}
+      {showEffects && (
         <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '4px',
-          maxWidth: '90vw',
-          zIndex: 10,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 5,
         }}>
-          {letters.map((letter) => (
+          {/* 1. SCREEN SHAKE */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            animation: 'screenShake 0.5s ease-out',
+          }} />
+
+          {/* 2. LIGHTNING BOLTS */}
+          {[...Array(3)].map((_, i) => (
             <div
-              key={`${letter.id}-${letter.char}`}
+              key={`bolt-${i}`}
               style={{
-                fontSize: 'clamp(40px, 15vw, 120px)',
-                fontWeight: '900',
-                fontFamily: '"Arial Black", "Impact", sans-serif',
-                background: 'linear-gradient(135deg, #FFD700, #FF69B4, #00FFFF)',
-                backgroundSize: '200% 200%',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textTransform: 'uppercase',
-                lineHeight: 1,
-                filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.5))',
-                animation: isExiting 
-                  ? `explode 0.8s ease-out forwards`
-                  : 'hitWall 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) forwards',
-                transform: isExiting ? 'scale(1)' : 'scale(1)',
-                opacity: 1,
-                ['--exit-x' as any]: `${letter.exitX}px`,
-                ['--exit-y' as any]: `${letter.exitY}px`,
-                ['--exit-rotate' as any]: `${letter.exitRotate}deg`,
+                position: 'absolute',
+                top: '0%',
+                left: `${20 + i * 30}%`,
+                width: '4px',
+                height: '100%',
+                background: 'linear-gradient(180deg, transparent, #FFD700, #FF69B4, transparent)',
+                filter: 'blur(2px)',
+                animation: `lightningFlash 0.3s ease-out ${i * 0.1}s`,
+                opacity: 0,
               }}
-            >
-              {letter.char === ' ' ? '\u00A0' : letter.char}
-            </div>
+            />
+          ))}
+
+          {/* 3. EXPLOSION RINGS */}
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={`ring-${i}`}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: `${100 + i * 50}px`,
+                height: `${100 + i * 50}px`,
+                border: `3px solid hsl(${300 + i * 20}, 100%, 70%)`,
+                borderRadius: '50%',
+                animation: `explosionRing ${1 + i * 0.2}s ease-out forwards`,
+                opacity: 0,
+                boxShadow: `0 0 ${30 + i * 20}px hsl(${300 + i * 20}, 100%, 70%)`,
+              }}
+            />
+          ))}
+
+          {/* 4. SPARKLE SHOWER */}
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={`sparkle-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${Math.random() * 100}%`,
+                top: '-10%',
+                width: `${Math.random() * 6 + 2}px`,
+                height: `${Math.random() * 6 + 2}px`,
+                background: `hsl(${Math.random() * 60 + 300}, 100%, 70%)`,
+                borderRadius: '50%',
+                boxShadow: `0 0 ${Math.random() * 20 + 10}px currentColor`,
+                animation: `sparkleFall ${1 + Math.random()}s linear forwards`,
+                animationDelay: `${Math.random() * 0.5}s`,
+              }}
+            />
+          ))}
+
+          {/* 5. FIREWORK BURSTS */}
+          {[...Array(8)].map((_, i) => (
+            <div
+              key={`firework-${i}`}
+              style={{
+                position: 'absolute',
+                top: `${30 + Math.random() * 40}%`,
+                left: `${30 + Math.random() * 40}%`,
+                width: '4px',
+                height: '4px',
+                background: `hsl(${Math.random() * 360}, 100%, 70%)`,
+                borderRadius: '50%',
+                boxShadow: `0 0 20px currentColor`,
+                animation: `fireworkBurst 1s ease-out forwards`,
+                animationDelay: `${Math.random() * 0.3}s`,
+              }}
+            />
           ))}
         </div>
       )}
 
+      {/* Name with EPIC styling */}
+      {currentGifter && (
+        <div style={{
+          paddingLeft: '8vw',
+          paddingRight: '8vw',
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          zIndex: 10,
+          filter: showEffects ? 'brightness(1.5) contrast(1.2)' : 'none',
+          transition: 'filter 0.3s ease',
+        }}>
+          <div
+            ref={textRef}
+            style={{
+              fontSize: `${fontSize}px`,
+              fontWeight: '900',
+              fontFamily: 'Arial Black, Impact, sans-serif',
+              background: 'linear-gradient(135deg, #FFD700, #FF69B4, #00FFFF, #FFD700)',
+              backgroundSize: '300% 300%',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              filter: 'drop-shadow(0 0 40px rgba(255,215,0,0.8)) drop-shadow(0 0 80px rgba(255,105,180,0.5))',
+              animation: animationState === 'entering' 
+                ? 'epicEnter 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards' 
+                : animationState === 'exiting'
+                ? 'explodeOut 1s ease-out forwards'
+                : 'none',
+              textShadow: showEffects ? '0 0 60px gold, 0 0 120px hotpink' : 'none',
+            }}
+          >
+            {currentGifter}
+          </div>
+        </div>
+      )}
+
       <style>{`
-        @keyframes hitWall {
+        @keyframes epicEnter {
           0% {
             opacity: 0;
-            transform: scale(3) translateY(-50px);
-            filter: blur(20px);
+            transform: scale(0.1) rotate(-20deg) translateY(100px);
+            filter: blur(40px);
           }
-          40% {
+          30% {
             opacity: 1;
-            transform: scale(1.1) translateY(5px);
+            transform: scale(1.3) rotate(5deg) translateY(-20px);
             filter: blur(0);
           }
-          60% {
-            transform: scale(0.95) translateY(-2px);
+          50% {
+            transform: scale(0.95) rotate(-3deg) translateY(5px);
           }
-          80% {
-            transform: scale(1.02) translateY(1px);
+          70% {
+            transform: scale(1.05) rotate(2deg) translateY(-2px);
           }
           100% {
             opacity: 1;
-            transform: scale(1) translateY(0);
+            transform: scale(1) rotate(0) translateY(0);
           }
         }
 
-        @keyframes explode {
+        @keyframes explodeOut {
           0% {
             opacity: 1;
-            transform: translate(0, 0) rotate(0) scale(1);
+            transform: scale(1);
+            filter: blur(0) brightness(1);
+          }
+          30% {
+            opacity: 0.9;
+            transform: scale(1.5);
+            filter: blur(2px) brightness(1.5);
+          }
+          60% {
+            opacity: 0.5;
+            transform: scale(2.5);
+            filter: blur(5px) brightness(2);
           }
           100% {
             opacity: 0;
-            transform: translate(var(--exit-x), var(--exit-y)) rotate(var(--exit-rotate)) scale(0.2);
+            transform: scale(4);
+            filter: blur(15px) brightness(3);
+          }
+        }
+
+        @keyframes screenShake {
+          0%, 100% { transform: translate(0, 0); }
+          10% { transform: translate(-10px, -5px); }
+          20% { transform: translate(8px, 6px); }
+          30% { transform: translate(-6px, -8px); }
+          40% { transform: translate(10px, 5px); }
+          50% { transform: translate(-5px, 10px); }
+          60% { transform: translate(5px, -5px); }
+          70% { transform: translate(-8px, 3px); }
+          80% { transform: translate(6px, -6px); }
+          90% { transform: translate(-3px, 4px); }
+        }
+
+        @keyframes lightningFlash {
+          0% { opacity: 0; transform: scaleY(0); }
+          20% { opacity: 1; transform: scaleY(1); }
+          80% { opacity: 0.8; transform: scaleY(1); }
+          100% { opacity: 0; transform: scaleY(0); }
+        }
+
+        @keyframes explosionRing {
+          0% {
+            opacity: 0.8;
+            transform: translate(-50%, -50%) scale(0.2);
+            border-width: 5px;
+          }
+          100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(3);
+            border-width: 1px;
+          }
+        }
+
+        @keyframes sparkleFall {
+          0% {
+            transform: translateY(-10vh) rotate(0deg);
+            opacity: 0;
+          }
+          20% {
+            opacity: 1;
+          }
+          80% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(110vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+
+        @keyframes fireworkBurst {
+          0% {
+            opacity: 1;
+            transform: scale(1);
+            box-shadow: 0 0 50px currentColor;
+          }
+          100% {
+            opacity: 0;
+            transform: scale(20);
+            box-shadow: 0 0 200px currentColor;
           }
         }
 
@@ -257,7 +373,7 @@ export default function UserPage() {
           margin: 0;
           padding: 0;
           overflow: hidden;
-          background: transparent;
+          background: transparent !important;
         }
       `}</style>
     </div>
