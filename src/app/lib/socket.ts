@@ -1,6 +1,6 @@
-import { io, Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 
-let socket: Socket | null = null;
+let socket: ReturnType<typeof io> | null = null;
 
 export interface ServerMessage {
   type: string;
@@ -9,11 +9,15 @@ export interface ServerMessage {
   [key: string]: any;
 }
 
-export function connectToSocket(): Socket {
+export function connectToSocket(): ReturnType<typeof io> {
   if (!socket) {
     console.log('🔄 Creating new socket connection...');
     
-    socket = io('http://localhost:3001', {
+    const SOCKET_URL = process.env.NODE_ENV === 'production'
+      ? 'https://saeedofficial.com'
+      : 'http://localhost:3001';
+    
+    socket = io(SOCKET_URL, {
       path: '/api/socket',
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
@@ -22,21 +26,16 @@ export function connectToSocket(): Socket {
       autoConnect: true
     });
 
-    // Log all connection events
     socket.on('connect', () => {
       console.log('✅ Socket connected! ID:', socket?.id);
     });
 
-    socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error: Error) => {
       console.error('❌ Socket connection error:', error.message);
     });
 
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason: string) => {
       console.log('🔌 Socket disconnected:', reason);
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
     });
   }
   
@@ -51,6 +50,6 @@ export function disconnectSocket() {
   }
 }
 
-export function getSocket(): Socket | null {
+export function getSocket(): ReturnType<typeof io> | null {
   return socket;
 }

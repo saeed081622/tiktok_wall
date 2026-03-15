@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { connectToSocket, disconnectSocket } from './lib/socket';
 
+
+
 // =============================================
 // TIKTOK USERNAME - CHANGE THIS
 // =============================================
-const TIKTOK_USERNAME = 'darnz_45';  // <-- Changed to darnz_45
+const TIKTOK_USERNAME = 'eduardtok';  // <-- CHANGE THIS
 // =============================================
 
 interface TikTokEvent {
@@ -57,9 +59,10 @@ export default function Home() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#1a1a1a',
+      background: 'transparent',  // Changed to transparent for overlay
       margin: 0,
-      padding: 0
+      padding: 0,
+      pointerEvents: 'none'  // So clicks pass through to your stream
     }}>
       {currentGifter ? (
         <div style={{
@@ -80,13 +83,12 @@ export default function Home() {
         </div>
       ) : (
         <div style={{
-          fontSize: '36px',
-          color: '#888',
+          fontSize: '24px',
+          color: 'rgba(255,255,255,0.3)',
           textAlign: 'center',
           fontFamily: 'Arial, sans-serif',
-          opacity: 0.7
         }}>
-          💝 Waiting for gifts from @darnz_45...
+          🎁
         </div>
       )}
 
@@ -106,6 +108,7 @@ export default function Home() {
           margin: 0;
           padding: 0;
           overflow: hidden;
+          background: transparent;
         }
       `}</style>
     </div>
