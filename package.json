@@ -6,8 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "socket": "node socket-server.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run socket\""
+    "socket": "node server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run socket\"",
+    "pm2:start": "pm2 start npm --name \"tiktok-nextjs\" -- run start && pm2 start node --name \"tiktok-socket\" -- server.js",
+    "pm2:stop": "pm2 stop tiktok-nextjs tiktok-socket",
+    "pm2:delete": "pm2 delete tiktok-nextjs tiktok-socket",
+    "pm2:restart": "pm2 restart tiktok-nextjs tiktok-socket",
+    "pm2:status": "pm2 status",
+    "pm2:logs": "pm2 logs",
+    "pm2:save": "pm2 save",
+    "pm2:monit": "pm2 monit"
   },
   "dependencies": {
     "next": "14.1.0",
