@@ -13,9 +13,10 @@ export function connectToSocket(): ReturnType<typeof io> {
   if (!socket) {
     console.log('🔄 Creating new socket connection...');
     
-const SOCKET_URL = process.env.NODE_ENV === 'production'
-  ? 'https://saeedofficial.com:3002'  // Added :3002
-  : 'http://localhost:3001';
+    // For local development, use port 3002
+    const SOCKET_URL = process.env.NODE_ENV === 'production'
+      ? 'https://saeedofficial.com:3002'  // Production
+      : 'http://localhost:3002';           // Local - changed to 3002
     
     socket = io(SOCKET_URL, {
       path: '/api/socket',
