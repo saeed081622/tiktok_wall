@@ -43,8 +43,7 @@ export default function UserPage() {
     setAnimationState('entering');
     setShowEffects(true);
     
-    // Epic 3-stage effect sequence
-    setTimeout(() => setShowEffects(false), 2000); // Effects last 2 seconds
+    setTimeout(() => setShowEffects(false), 2000);
     
     setTimeout(() => {
       setAnimationState('exiting');
@@ -108,20 +107,20 @@ export default function UserPage() {
           onClick={() => setTestMode(!testMode)}
           style={{
             padding: '8px 16px',
-            background: testMode ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.1)',
+            background: testMode ? 'rgba(0,255,255,0.3)' : 'rgba(255,255,255,0.1)',
             color: 'white',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: '1px solid rgba(0,255,255,0.3)',
             borderRadius: 20,
             cursor: 'pointer',
             fontSize: '12px',
             backdropFilter: 'blur(5px)',
           }}
         >
-          {testMode ? '✨ EPIC MODE' : '⚡ TEST'}
+          {testMode ? '✨ COOL MODE' : '⚡ TEST'}
         </button>
       </div>
 
-      {/* EPIC EFFECTS LAYER */}
+      {/* COOL COLOR EFFECTS - Blues, Purples, Cyans */}
       {showEffects && (
         <div style={{
           position: 'absolute',
@@ -132,17 +131,7 @@ export default function UserPage() {
           pointerEvents: 'none',
           zIndex: 5,
         }}>
-          {/* 1. SCREEN SHAKE */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            animation: 'screenShake 0.5s ease-out',
-          }} />
-
-          {/* 2. LIGHTNING BOLTS */}
+          {/* 1. COOL LIGHTNING - Electric Blue */}
           {[...Array(3)].map((_, i) => (
             <div
               key={`bolt-${i}`}
@@ -152,15 +141,16 @@ export default function UserPage() {
                 left: `${20 + i * 30}%`,
                 width: '4px',
                 height: '100%',
-                background: 'linear-gradient(180deg, transparent, #FFD700, #FF69B4, transparent)',
-                filter: 'blur(2px)',
+                background: 'linear-gradient(180deg, transparent, #00FFFF, #4169E1, #4B0082, transparent)',
+                filter: 'blur(3px)',
                 animation: `lightningFlash 0.3s ease-out ${i * 0.1}s`,
                 opacity: 0,
+                boxShadow: '0 0 30px #00FFFF',
               }}
             />
           ))}
 
-          {/* 3. EXPLOSION RINGS */}
+          {/* 2. COOL EXPLOSION RINGS - Purple to Blue */}
           {[...Array(5)].map((_, i) => (
             <div
               key={`ring-${i}`}
@@ -171,56 +161,79 @@ export default function UserPage() {
                 transform: 'translate(-50%, -50%)',
                 width: `${100 + i * 50}px`,
                 height: `${100 + i * 50}px`,
-                border: `3px solid hsl(${300 + i * 20}, 100%, 70%)`,
+                border: `3px solid ${i % 2 === 0 ? '#00FFFF' : '#9370DB'}`,
                 borderRadius: '50%',
                 animation: `explosionRing ${1 + i * 0.2}s ease-out forwards`,
                 opacity: 0,
-                boxShadow: `0 0 ${30 + i * 20}px hsl(${300 + i * 20}, 100%, 70%)`,
+                boxShadow: `0 0 ${30 + i * 20}px ${i % 2 === 0 ? '#00FFFF' : '#9370DB'}`,
               }}
             />
           ))}
 
-          {/* 4. SPARKLE SHOWER */}
-          {[...Array(30)].map((_, i) => (
+          {/* 3. COOL SPARKLE SHOWER - Cyan, Purple, Blue */}
+          {[...Array(40)].map((_, i) => {
+            const colors = ['#00FFFF', '#4169E1', '#9370DB', '#8A2BE2', '#4B0082'];
+            return (
+              <div
+                key={`sparkle-${i}`}
+                style={{
+                  position: 'absolute',
+                  left: `${Math.random() * 100}%`,
+                  top: '-10%',
+                  width: `${Math.random() * 8 + 3}px`,
+                  height: `${Math.random() * 8 + 3}px`,
+                  background: colors[Math.floor(Math.random() * colors.length)],
+                  borderRadius: '50%',
+                  boxShadow: `0 0 ${Math.random() * 30 + 15}px currentColor`,
+                  animation: `sparkleFall ${1.5 + Math.random()}s linear forwards`,
+                  animationDelay: `${Math.random() * 0.8}s`,
+                }}
+              />
+            );
+          })}
+
+          {/* 4. COOL ENERGY WAVES */}
+          {[...Array(6)].map((_, i) => (
             <div
-              key={`sparkle-${i}`}
+              key={`wave-${i}`}
               style={{
                 position: 'absolute',
-                left: `${Math.random() * 100}%`,
-                top: '-10%',
-                width: `${Math.random() * 6 + 2}px`,
-                height: `${Math.random() * 6 + 2}px`,
-                background: `hsl(${Math.random() * 60 + 300}, 100%, 70%)`,
-                borderRadius: '50%',
-                boxShadow: `0 0 ${Math.random() * 20 + 10}px currentColor`,
-                animation: `sparkleFall ${1 + Math.random()}s linear forwards`,
-                animationDelay: `${Math.random() * 0.5}s`,
+                top: `${10 + i * 15}%`,
+                left: '-10%',
+                width: '120%',
+                height: '2px',
+                background: `linear-gradient(90deg, transparent, #00FFFF, #9370DB, #4B0082, transparent)`,
+                filter: 'blur(2px)',
+                animation: `energyWave ${2 + i * 0.3}s ease-out infinite`,
+                opacity: 0.3,
+                transform: `rotate(${i * 5}deg)`,
               }}
             />
           ))}
 
-          {/* 5. FIREWORK BURSTS */}
-          {[...Array(8)].map((_, i) => (
+          {/* 5. COOL CRYSTAL BURSTS */}
+          {[...Array(12)].map((_, i) => (
             <div
-              key={`firework-${i}`}
+              key={`crystal-${i}`}
               style={{
                 position: 'absolute',
                 top: `${30 + Math.random() * 40}%`,
                 left: `${30 + Math.random() * 40}%`,
-                width: '4px',
-                height: '4px',
-                background: `hsl(${Math.random() * 360}, 100%, 70%)`,
+                width: '6px',
+                height: '6px',
+                background: `hsl(${240 + Math.random() * 60}, 100%, 70%)`,
                 borderRadius: '50%',
-                boxShadow: `0 0 20px currentColor`,
-                animation: `fireworkBurst 1s ease-out forwards`,
-                animationDelay: `${Math.random() * 0.3}s`,
+                boxShadow: `0 0 40px currentColor`,
+                animation: `crystalBurst 1.2s ease-out forwards`,
+                animationDelay: `${Math.random() * 0.4}s`,
+                filter: 'blur(1px)',
               }}
             />
           ))}
         </div>
       )}
 
-      {/* Name with EPIC styling */}
+      {/* Name with COOL colors that POP against orange skin */}
       {currentGifter && (
         <div style={{
           paddingLeft: '8vw',
@@ -229,7 +242,7 @@ export default function UserPage() {
           display: 'flex',
           justifyContent: 'center',
           zIndex: 10,
-          filter: showEffects ? 'brightness(1.5) contrast(1.2)' : 'none',
+          filter: showEffects ? 'brightness(1.3) contrast(1.2)' : 'none',
           transition: 'filter 0.3s ease',
         }}>
           <div
@@ -238,20 +251,22 @@ export default function UserPage() {
               fontSize: `${fontSize}px`,
               fontWeight: '900',
               fontFamily: 'Arial Black, Impact, sans-serif',
-              background: 'linear-gradient(135deg, #FFD700, #FF69B4, #00FFFF, #FFD700)',
-              backgroundSize: '300% 300%',
+              // COOL gradient - blues and purples (contrasts with orange skin)
+              background: 'linear-gradient(135deg, #00FFFF, #4169E1, #9370DB, #8A2BE2, #4B0082)',
+              backgroundSize: '400% 400%',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
               textTransform: 'uppercase',
               whiteSpace: 'nowrap',
-              filter: 'drop-shadow(0 0 40px rgba(255,215,0,0.8)) drop-shadow(0 0 80px rgba(255,105,180,0.5))',
+              // Cool-toned glows
+              filter: 'drop-shadow(0 0 40px rgba(0,255,255,0.8)) drop-shadow(0 0 80px rgba(147,112,219,0.6)) drop-shadow(0 0 120px rgba(75,0,130,0.4))',
               animation: animationState === 'entering' 
-                ? 'epicEnter 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards' 
+                ? 'coolEnter 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards' 
                 : animationState === 'exiting'
-                ? 'explodeOut 1s ease-out forwards'
+                ? 'coolExit 1s ease-out forwards'
                 : 'none',
-              textShadow: showEffects ? '0 0 60px gold, 0 0 120px hotpink' : 'none',
+              textShadow: showEffects ? '0 0 60px cyan, 0 0 120px blueviolet' : 'none',
             }}
           >
             {currentGifter}
@@ -260,16 +275,16 @@ export default function UserPage() {
       )}
 
       <style>{`
-        @keyframes epicEnter {
+        @keyframes coolEnter {
           0% {
             opacity: 0;
             transform: scale(0.1) rotate(-20deg) translateY(100px);
-            filter: blur(40px);
+            filter: blur(40px) brightness(0.5);
           }
           30% {
             opacity: 1;
             transform: scale(1.3) rotate(5deg) translateY(-20px);
-            filter: blur(0);
+            filter: blur(0) brightness(1.3);
           }
           50% {
             transform: scale(0.95) rotate(-3deg) translateY(5px);
@@ -280,43 +295,31 @@ export default function UserPage() {
           100% {
             opacity: 1;
             transform: scale(1) rotate(0) translateY(0);
+            filter: brightness(1.2);
           }
         }
 
-        @keyframes explodeOut {
+        @keyframes coolExit {
           0% {
             opacity: 1;
             transform: scale(1);
-            filter: blur(0) brightness(1);
+            filter: blur(0) brightness(1.2);
           }
           30% {
-            opacity: 0.9;
-            transform: scale(1.5);
-            filter: blur(2px) brightness(1.5);
+            opacity: 0.8;
+            transform: scale(1.8);
+            filter: blur(3px) brightness(1.5) hue-rotate(30deg);
           }
           60% {
-            opacity: 0.5;
-            transform: scale(2.5);
-            filter: blur(5px) brightness(2);
+            opacity: 0.4;
+            transform: scale(3);
+            filter: blur(8px) brightness(2) hue-rotate(60deg);
           }
           100% {
             opacity: 0;
-            transform: scale(4);
-            filter: blur(15px) brightness(3);
+            transform: scale(5);
+            filter: blur(20px) brightness(3) hue-rotate(90deg);
           }
-        }
-
-        @keyframes screenShake {
-          0%, 100% { transform: translate(0, 0); }
-          10% { transform: translate(-10px, -5px); }
-          20% { transform: translate(8px, 6px); }
-          30% { transform: translate(-6px, -8px); }
-          40% { transform: translate(10px, 5px); }
-          50% { transform: translate(-5px, 10px); }
-          60% { transform: translate(5px, -5px); }
-          70% { transform: translate(-8px, 3px); }
-          80% { transform: translate(6px, -6px); }
-          90% { transform: translate(-3px, 4px); }
         }
 
         @keyframes lightningFlash {
@@ -334,7 +337,7 @@ export default function UserPage() {
           }
           100% {
             opacity: 0;
-            transform: translate(-50%, -50%) scale(3);
+            transform: translate(-50%, -50%) scale(4);
             border-width: 1px;
           }
         }
@@ -356,7 +359,21 @@ export default function UserPage() {
           }
         }
 
-        @keyframes fireworkBurst {
+        @keyframes energyWave {
+          0% {
+            transform: translateX(-100%) rotate(0deg);
+            opacity: 0.3;
+          }
+          50% {
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateX(100%) rotate(0deg);
+            opacity: 0;
+          }
+        }
+
+        @keyframes crystalBurst {
           0% {
             opacity: 1;
             transform: scale(1);
@@ -364,7 +381,7 @@ export default function UserPage() {
           }
           100% {
             opacity: 0;
-            transform: scale(20);
+            transform: scale(25);
             box-shadow: 0 0 200px currentColor;
           }
         }
