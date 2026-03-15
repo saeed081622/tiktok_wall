@@ -1,15 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { connectToSocket, disconnectSocket } from './lib/socket';
-
-
-
-// =============================================
-// TIKTOK USERNAME - CHANGE THIS
-// =============================================
-const TIKTOK_USERNAME = 'amir_mansory';//'darnz_45';  // <-- CHANGE THIS
-// =============================================
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { connectToSocket, disconnectSocket } from '@/app/lib/socket';
 
 interface TikTokEvent {
   type: 'gift';
@@ -18,24 +11,26 @@ interface TikTokEvent {
   timestamp: number;
 }
 
-export default function Home() {
+export default function UserPage() {
+  const params = useParams();
+  const userId = params?.id as string; // Gets "244344" from /user/244344
+  
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) return;
+
     const socket = connectToSocket();
 
     const handleConnect = () => {
-      socket.emit('connect-tiktok', TIKTOK_USERNAME);
+      // Use the userId from URL as the TikTok username
+      socket.emit('connect-tiktok', userId);
     };
 
     const handleTikTokEvent = (event: any) => {
       if (event.type === 'gift') {
         setCurrentGifter(event.nickname);
-        
-        // Clear after 5 seconds
-        setTimeout(() => {
-          setCurrentGifter(null);
-        }, 5000);
+        setTimeout(() => setCurrentGifter(null), 5000);
       }
     };
 
@@ -47,7 +42,7 @@ export default function Home() {
       socket.off('tiktok-event', handleTikTokEvent);
       disconnectSocket();
     };
-  }, []);
+  }, [userId]); // Re-run when userId changes
 
   return (
     <div style={{ 
@@ -59,10 +54,10 @@ export default function Home() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'transparent',  // Changed to transparent for overlay
+      background: 'transparent',
       margin: 0,
       padding: 0,
-      pointerEvents: 'none'  // So clicks pass through to your stream
+      pointerEvents: 'none'
     }}>
       {currentGifter ? (
         <div style={{
@@ -88,29 +83,9 @@ export default function Home() {
           textAlign: 'center',
           fontFamily: 'Arial, sans-serif',
         }}>
-          🎁
+          🎁 Watching @{userId}
         </div>
       )}
-
-      <style>{`
-        @keyframes fadeInOut {
-          0% { opacity: 0; transform: scale(0.5); }
-          10% { opacity: 1; transform: scale(1); }
-          90% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(0.5); }
-        }
-        @keyframes gradientShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        body {
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          background: transparent;
-        }
-      `}</style>
     </div>
   );
 }
