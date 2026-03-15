@@ -45,6 +45,8 @@ app.prepare().then(() => {
         const cleanUsername = username.replace('@', '');
         
         tiktokConnection = new TikTokLiveConnection(cleanUsername, {
+          // 🔑 YOUR EULERSTREAM API KEY - Free tier, 10,000 requests/day
+          signApiKey: 'euler_ODE4YjUxNTZiNzg2NDgzN2E2OTQwN2QwZjkwZjA0MWU3OTNlMjEzYWRmOTIwNjFlZDVhNzY1',
           enableExtendedGiftInfo: false,
           processInitialData: true,
           requestPollingIntervalMs: 2000,
@@ -152,6 +154,7 @@ app.prepare().then(() => {
     console.log(`\n🚀 Server is running on port ${PORT}`);
     console.log(`📁 Next.js + Socket.io combined`);
     console.log(`🌐 Allowed origins: https://saeedofficial.com, http://localhost:3000`);
+    console.log(`🔑 EulerStream API key loaded (10,000 requests/day)`);
     console.log('\nWaiting for connections...\n');
   });
 });
