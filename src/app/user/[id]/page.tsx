@@ -13,7 +13,7 @@ interface TikTokEvent {
 
 export default function UserPage() {
   const params = useParams();
-  const userId = params?.id as string; // Gets "244344" from /user/244344
+  const userId = params?.id as string;
   
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
 
@@ -23,14 +23,17 @@ export default function UserPage() {
     const socket = connectToSocket();
 
     const handleConnect = () => {
-      // Use the userId from URL as the TikTok username
       socket.emit('connect-tiktok', userId);
     };
 
     const handleTikTokEvent = (event: any) => {
       if (event.type === 'gift') {
         setCurrentGifter(event.nickname);
-        setTimeout(() => setCurrentGifter(null), 5000);
+        
+        // Clear after 5 seconds
+        setTimeout(() => {
+          setCurrentGifter(null);
+        }, 5000);
       }
     };
 
@@ -42,7 +45,7 @@ export default function UserPage() {
       socket.off('tiktok-event', handleTikTokEvent);
       disconnectSocket();
     };
-  }, [userId]); // Re-run when userId changes
+  }, [userId]);
 
   return (
     <div style={{ 
@@ -83,9 +86,29 @@ export default function UserPage() {
           textAlign: 'center',
           fontFamily: 'Arial, sans-serif',
         }}>
-          🎁 Watching @{userId}
+          🎁
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: scale(0.5); }
+          10% { opacity: 1; transform: scale(1); }
+          90% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.5); }
+        }
+        @keyframes gradientShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          background: transparent;
+        }
+      `}</style>
     </div>
   );
 }
