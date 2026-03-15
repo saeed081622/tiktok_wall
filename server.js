@@ -135,7 +135,8 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
+// Changed from 3001 to 3002
+const PORT = process.env.PORT || 3002;
 httpServer.listen(PORT, () => {
   console.log('\n🚀 Socket server is running!');
   console.log(`📡 Port: ${PORT}`);
