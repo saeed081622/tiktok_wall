@@ -4,6 +4,15 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { connectToSocket, disconnectSocket } from '@/app/lib/socket';
 
+// Top Gifter Interface
+interface TopGifter {
+  username: string;
+  nickname: string;
+  totalDiamonds: number;
+  giftName: string;
+  lastGiftTime: number;
+}
+
 export default function UserPage() {
   const params = useParams();
   const userId = params?.id as string;
@@ -12,6 +21,7 @@ export default function UserPage() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
   const [currentGiftImage, setCurrentGiftImage] = useState<string | null>(null);
+  const [topGifter, setTopGifter] = useState<TopGifter | null>(null);
   const [currentMVP, setCurrentMVP] = useState<{ nickname: string; score: number } | null>(null);
   const [battleActive, setBattleActive] = useState(false);
   const [testMode, setTestMode] = useState(false);
@@ -23,6 +33,7 @@ export default function UserPage() {
   const socketRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   let nextLikeId = useRef(0);
+  const mvpTimeoutRef = useRef<NodeJS.Timeout>();
 
   const extractLetters = (name: string): string => {
     if (!name) return 'GIFT';
@@ -47,7 +58,23 @@ export default function UserPage() {
     setFontSize(testSize);
   }, [currentGifter]);
 
-  const triggerGift = (name: string, giftImage?: string) => {
+  const triggerGift = (name: string, giftImage?: string, giftName?: string, diamonds?: number, username?: string, nickname?: string) => {
+    // Update top gifter
+    if (username && diamonds) {
+      setTopGifter(current => {
+        if (!current || diamonds > current.totalDiamonds) {
+          return {
+            username: username,
+            nickname: nickname || username,
+            totalDiamonds: diamonds,
+            giftName: giftName || 'Gift',
+            lastGiftTime: Date.now()
+          };
+        }
+        return current;
+      });
+    }
+
     setCurrentGifter(name);
     setCurrentGiftImage(giftImage || null);
     setAnimationState('entering');
@@ -66,43 +93,58 @@ export default function UserPage() {
     }, 3000);
   };
 
-  // Like animation handler
+  // Like animation with ease-out effect
   const addLike = (username: string) => {
     const id = nextLikeId.current++;
-    const x = Math.random() * 80 + 10; // Random position between 10% and 90%
-    const y = Math.random() * 60 + 20; // Random position between 20% and 80%
+    const x = Math.random() * 80 + 10;
+    const y = Math.random() * 60 + 20;
     
     setLikes(prev => [...prev, { id, username: username || 'someone', x, y }]);
     
-    // Remove like after animation completes
+    // Remove like after animation completes (2 seconds)
     setTimeout(() => {
       setLikes(prev => prev.filter(like => like.id !== id));
     }, 2000);
   };
 
   const showMVPAlert = (nickname: string, score: number) => {
+    // Clear previous timeout
+    if (mvpTimeoutRef.current) {
+      clearTimeout(mvpTimeoutRef.current);
+    }
+    
     setCurrentMVP({ nickname, score });
-    setTimeout(() => setCurrentMVP(null), 4000);
+    
+    // Set timeout to hide MVP after 15 seconds
+    mvpTimeoutRef.current = setTimeout(() => {
+      setCurrentMVP(null);
+    }, 15000);
   };
 
   const testGift = () => {
-    const names = ['👑 ALEXANDER', '⚡ VICTORIA', '🔥 CHRISTOPHER', '💎 ELIZABETH', '🌟 JONATHAN', '✨ CATHERINE'];
-    const name = names[Math.floor(Math.random() * names.length)];
-    triggerGift(name);
+    const testGifters = [
+      { name: '👑 ALEXANDER', diamonds: 5000, gift: 'Dragon', username: 'alexander123', nickname: 'Alexander' },
+      { name: '⚡ VICTORIA', diamonds: 3500, gift: 'Rose', username: 'victoria456', nickname: 'Victoria' },
+      { name: '🔥 CHRISTOPHER', diamonds: 8000, gift: 'Galaxy', username: 'christopher789', nickname: 'Christopher' },
+      { name: '💎 ELIZABETH', diamonds: 12000, gift: 'Universe', username: 'elizabeth999', nickname: 'Elizabeth' },
+      { name: '🌟 JONATHAN', diamonds: 2000, gift: 'Heart', username: 'jonathan111', nickname: 'Jonathan' },
+    ];
+    const gifter = testGifters[Math.floor(Math.random() * testGifters.length)];
+    const cleanName = extractLetters(gifter.name);
+    triggerGift(cleanName, undefined, gifter.gift, gifter.diamonds, gifter.username, gifter.nickname);
   };
 
-  // Test like
   const testLike = () => {
-    const names = ['carlyp7996', 'alex123', 'user456', 'fan789'];
+    const names = ['carlyp7996', 'alex123', 'user456', 'fan789', 'coolguy', 'streamerfan'];
     const name = names[Math.floor(Math.random() * names.length)];
     addLike(name);
   };
 
-  // Test mode for gifts
+  // Test mode for gifts and likes
   useEffect(() => {
     if (!testMode) return;
-    const giftInterval = setInterval(testGift, 5000);
-    const likeInterval = setInterval(testLike, 2000);
+    const giftInterval = setInterval(testGift, 8000);
+    const likeInterval = setInterval(testLike, 1500);
     return () => {
       clearInterval(giftInterval);
       clearInterval(likeInterval);
@@ -157,10 +199,17 @@ export default function UserPage() {
       if (event.type === 'gift') {
         const rawName = event.nickname || event.username || 'GIFT';
         const cleanName = extractLetters(rawName);
-        triggerGift(cleanName, event.giftImage);
+        triggerGift(
+          cleanName, 
+          event.giftImage, 
+          event.giftName, 
+          event.totalDiamonds, 
+          event.username, 
+          event.nickname
+        );
       }
       
-      // LIKE EVENT - NEW!
+      // LIKE EVENT
       if (event.type === 'like') {
         console.log(`❤️ Like from ${event.nickname} (${event.count} likes, total: ${event.total})`);
         addLike(event.nickname);
@@ -261,6 +310,9 @@ export default function UserPage() {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      if (mvpTimeoutRef.current) {
+        clearTimeout(mvpTimeoutRef.current);
+      }
       socket.off('connect', onConnect);
       socket.off('connection-result', onConnectionResult);
       socket.off('tiktok-event', onTikTokEvent);
@@ -289,6 +341,58 @@ export default function UserPage() {
       pointerEvents: 'none',
       overflow: 'hidden',
     }}>
+      {/* TOP GIFT LEADERBOARD - Big and Prominent */}
+      {topGifter && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          background: 'linear-gradient(135deg, rgba(0,0,0,0.8), rgba(50,0,80,0.9))',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '20px',
+          padding: '16px 24px',
+          border: '2px solid gold',
+          boxShadow: '0 0 40px rgba(255,215,0,0.5), 0 0 20px rgba(255,0,255,0.3)',
+          zIndex: 30,
+          animation: 'leaderboardGlow 2s ease-in-out infinite, slideInLeft 0.5s ease-out',
+          pointerEvents: 'auto',
+          minWidth: '280px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '32px' }}>👑</span>
+            <span style={{ 
+              fontSize: '20px', 
+              fontWeight: 'bold',
+              background: 'linear-gradient(135deg, gold, #ffd700, #ffb347)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>
+              TOP GIFT GIVER
+            </span>
+          </div>
+          <div style={{ 
+            fontSize: '28px', 
+            fontWeight: '900',
+            color: '#FFD700',
+            textShadow: '0 0 10px rgba(255,215,0,0.5)',
+            marginBottom: '8px'
+          }}>
+            {topGifter.nickname}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#aaa' }}>GIFT</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff' }}>{topGifter.giftName}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#aaa' }}>DIAMONDS</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#FFD700' }}>💎 {topGifter.totalDiamonds.toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Connection Status Indicator */}
       <div style={{
         position: 'fixed',
@@ -312,7 +416,7 @@ export default function UserPage() {
          '🟡 CONNECTING...'}
       </div>
 
-      {/* LIKE ANIMATIONS - NEW! */}
+      {/* LIKE ANIMATIONS - Ease-out effect */}
       {likes.map((like) => (
         <div
           key={like.id}
@@ -320,7 +424,7 @@ export default function UserPage() {
             position: 'fixed',
             left: `${like.x}%`,
             top: `${like.y}%`,
-            animation: 'likeFloat 2s ease-out forwards',
+            animation: 'likeFloatEase 2s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards',
             pointerEvents: 'none',
             zIndex: 25,
           }}
@@ -335,7 +439,7 @@ export default function UserPage() {
             boxShadow: '0 0 20px rgba(255,51,102,0.5)',
             backdropFilter: 'blur(5px)',
           }}>
-            <span style={{ fontSize: '24px' }}>❤️</span>
+            <span style={{ fontSize: '24px', animation: 'heartBeat 0.3s ease-out' }}>❤️</span>
             <span style={{
               color: 'white',
               fontWeight: 'bold',
@@ -400,29 +504,40 @@ export default function UserPage() {
         )}
       </div>
 
-      {/* BATTLE MVP ALERT */}
+      {/* BATTLE MVP ALERT - Enhanced Animation */}
       {currentMVP && (
         <div style={{
           position: 'fixed',
-          top: '20px',
+          top: '50%',
           left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'linear-gradient(135deg, #00FFFF, #9370DB, #4B0082)',
-          padding: '12px 24px',
-          borderRadius: '50px',
+          transform: 'translate(-50%, -50%)',
+          background: 'linear-gradient(135deg, #FFD700, #FFA500, #FF4500, #FF1493)',
+          backgroundSize: '300% 300%',
+          padding: '24px 48px',
+          borderRadius: '60px',
           color: 'white',
           fontWeight: 'bold',
-          fontSize: '18px',
-          fontFamily: 'Arial Black, sans-serif',
-          textShadow: '0 0 10px rgba(0,0,0,0.5)',
-          boxShadow: '0 0 30px rgba(0,255,255,0.6)',
+          fontSize: '32px',
+          fontFamily: 'Arial Black, Impact, sans-serif',
+          textShadow: '0 0 20px rgba(0,0,0,0.5), 0 0 10px rgba(255,215,0,0.8)',
+          boxShadow: '0 0 60px rgba(255,215,0,0.8), 0 0 120px rgba(255,69,0,0.5)',
           zIndex: 20,
-          animation: 'slideDown 0.5s ease-out, glowPulse 1s ease-in-out infinite',
-          backdropFilter: 'blur(5px)',
+          animation: 'mvpGlow 1.5s ease-in-out infinite, mvpEntrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+          backdropFilter: 'blur(10px)',
           whiteSpace: 'nowrap',
           pointerEvents: 'none',
+          border: '3px solid gold',
+          letterSpacing: '2px',
         }}>
-          🏆 {currentMVP.nickname} - {currentMVP.score} POINTS 🏆
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <span style={{ fontSize: '48px', animation: 'crownFloat 2s ease-in-out infinite' }}>👑</span>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '20px', marginBottom: '8px', opacity: 0.9 }}>🏆 MOST VALUABLE PLAYER 🏆</div>
+              <div style={{ fontSize: '48px', fontWeight: '900' }}>{currentMVP.nickname}</div>
+              <div style={{ fontSize: '24px', marginTop: '8px', color: '#FFD700' }}>{currentMVP.score.toLocaleString()} POINTS</div>
+            </div>
+            <span style={{ fontSize: '48px', animation: 'crownFloat 2s ease-in-out infinite reverse' }}>👑</span>
+          </div>
         </div>
       )}
 
@@ -633,22 +748,91 @@ export default function UserPage() {
           }
         }
 
-        @keyframes likeFloat {
+        @keyframes likeFloatEase {
           0% {
             opacity: 0;
-            transform: translateY(0) scale(0.5);
+            transform: translateY(0) scale(0.3);
           }
           20% {
             opacity: 1;
-            transform: translateY(-20px) scale(1);
+            transform: translateY(-30px) scale(1);
           }
-          80% {
+          60% {
             opacity: 1;
-            transform: translateY(-60px) scale(1);
+            transform: translateY(-80px) scale(0.95);
           }
           100% {
             opacity: 0;
-            transform: translateY(-100px) scale(0.8);
+            transform: translateY(-120px) scale(0.8);
+          }
+        }
+
+        @keyframes heartBeat {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.3);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes mvpEntrance {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.2) rotate(-180deg);
+          }
+          50% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.1) rotate(5deg);
+          }
+          100% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1) rotate(0deg);
+          }
+        }
+
+        @keyframes mvpGlow {
+          0%, 100% {
+            box-shadow: 0 0 60px rgba(255,215,0,0.8), 0 0 120px rgba(255,69,0,0.5);
+            background-position: 0% 50%;
+          }
+          50% {
+            box-shadow: 0 0 100px rgba(255,215,0,1), 0 0 180px rgba(255,69,0,0.8);
+            background-position: 100% 50%;
+          }
+        }
+
+        @keyframes crownFloat {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes leaderboardGlow {
+          0%, 100% {
+            box-shadow: 0 0 40px rgba(255,215,0,0.5), 0 0 20px rgba(255,0,255,0.3);
+            border-color: gold;
+          }
+          50% {
+            box-shadow: 0 0 60px rgba(255,215,0,0.8), 0 0 30px rgba(255,0,255,0.5);
+            border-color: #ffd700;
+          }
+        }
+
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-100px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
 
@@ -686,26 +870,6 @@ export default function UserPage() {
           100% {
             transform: translateY(110vh) rotate(360deg);
             opacity: 0;
-          }
-        }
-
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-50px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-          }
-        }
-
-        @keyframes glowPulse {
-          0%, 100% {
-            box-shadow: 0 0 20px rgba(0,255,255,0.6);
-          }
-          50% {
-            box-shadow: 0 0 40px rgba(0,255,255,0.9), 0 0 20px rgba(147,112,219,0.6);
           }
         }
 
