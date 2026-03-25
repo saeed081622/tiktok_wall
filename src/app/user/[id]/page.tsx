@@ -93,15 +93,17 @@ export default function UserPage() {
     }, 3000);
   };
 
-  // Like animation with ease-out effect
+  // Like animation with constrained area (20% from sides, 20% from top, 40% from bottom)
   const addLike = (username: string) => {
     const id = nextLikeId.current++;
-    const x = Math.random() * 80 + 10;
-    const y = Math.random() * 60 + 20;
+    // X: between 20% and 80% (20% away from both sides)
+    const x = Math.random() * 60 + 20;
+    // Y: between 20% and 60% (20% from top, 40% from bottom = 60% max)
+    const y = Math.random() * 40 + 20;
     
     setLikes(prev => [...prev, { id, username: username || 'someone', x, y }]);
     
-    // Remove like after animation completes (2 seconds)
+    // Remove like after animation completes
     setTimeout(() => {
       setLikes(prev => prev.filter(like => like.id !== id));
     }, 2000);
@@ -140,14 +142,86 @@ export default function UserPage() {
     addLike(name);
   };
 
-  // Test mode for gifts and likes
+  const testBattle = () => {
+    console.log('🧪 TEST: Simulating battle events');
+    // Simulate battle start
+    onBattleStart({
+      type: 'battle_start',
+      battleId: 'test_battle_123',
+      users: [
+        { userId: '1', username: 'streamer1', nickname: 'Streamer 1' },
+        { userId: '2', username: 'streamer2', nickname: 'Streamer 2' }
+      ],
+      timestamp: Date.now()
+    });
+    
+    // Simulate MVP updates
+    setTimeout(() => {
+      onBattleMVP({
+        type: 'battle_mvp',
+        battleId: 'test_battle_123',
+        mvp: { userId: '1', username: 'streamer1', nickname: 'Streamer 1', score: 2500 },
+        timestamp: Date.now()
+      });
+    }, 2000);
+    
+    setTimeout(() => {
+      onBattleMVP({
+        type: 'battle_mvp',
+        battleId: 'test_battle_123',
+        mvp: { userId: '2', username: 'streamer2', nickname: 'Streamer 2', score: 5000 },
+        timestamp: Date.now()
+      });
+    }, 5000);
+    
+    setTimeout(() => {
+      onBattleEnd({
+        type: 'battle_end',
+        battleId: 'test_battle_123',
+        winner: { userId: '2', username: 'streamer2', nickname: 'Streamer 2' },
+        mvp: { userId: '2', username: 'streamer2', nickname: 'Streamer 2', score: 5000 },
+        finalScores: [
+          { userId: '1', username: 'streamer1', nickname: 'Streamer 1', score: 2500 },
+          { userId: '2', username: 'streamer2', nickname: 'Streamer 2', score: 5000 }
+        ],
+        timestamp: Date.now()
+      });
+    }, 8000);
+  };
+
+  // Manual handlers for testing
+  const onBattleStart = (event: any) => {
+    console.log('⚔️ Battle started!', event);
+    setBattleActive(true);
+  };
+
+  const onBattleMVP = (event: any) => {
+    console.log('🏆 MVP update:', event);
+    const mvp = event.mvp;
+    if (mvp && mvp.score > 0) {
+      showMVPAlert(mvp.nickname, mvp.score);
+    }
+  };
+
+  const onBattleEnd = (event: any) => {
+    console.log('🏁 Battle ended!', event);
+    setBattleActive(false);
+    const finalMVP = event.mvp;
+    if (finalMVP) {
+      showMVPAlert(`${finalMVP.nickname} 🏆 WINNER!`, finalMVP.score);
+    }
+  };
+
+  // Test mode for gifts, likes, and battles
   useEffect(() => {
     if (!testMode) return;
     const giftInterval = setInterval(testGift, 8000);
     const likeInterval = setInterval(testLike, 1500);
+    const battleInterval = setInterval(testBattle, 30000); // Test battle every 30 seconds
     return () => {
       clearInterval(giftInterval);
       clearInterval(likeInterval);
+      clearInterval(battleInterval);
     };
   }, [testMode]);
 
@@ -217,6 +291,7 @@ export default function UserPage() {
       
       // BATTLE START EVENT
       if (event.type === 'battle_start') {
+        console.log('⚔️ BATTLE START RECEIVED:', event);
         setBattleActive(true);
         const battleUsers = event.users?.map((u: any) => u.nickname).join(' vs ') || 'unknown';
         console.log(`⚔️ Battle started! ${battleUsers}`);
@@ -224,6 +299,7 @@ export default function UserPage() {
       
       // BATTLE MVP EVENT
       if (event.type === 'battle_mvp') {
+        console.log('🏆 BATTLE MVP RECEIVED:', event);
         const mvp = event.mvp;
         if (mvp && mvp.score > 0) {
           console.log(`🏆 MVP: ${mvp.nickname} with ${mvp.score} points`);
@@ -233,6 +309,7 @@ export default function UserPage() {
       
       // BATTLE END EVENT
       if (event.type === 'battle_end') {
+        console.log('🏁 BATTLE END RECEIVED:', event);
         setBattleActive(false);
         const finalMVP = event.mvp;
         console.log(`🏁 Battle ended! Final MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
@@ -327,6 +404,13 @@ export default function UserPage() {
     };
   }, [userId]);
 
+  // Debug: Check if battle events are registered
+  useEffect(() => {
+    console.log('🔍 Checking battle event handlers...');
+    console.log('Battle Active:', battleActive);
+    console.log('MVP:', currentMVP);
+  }, [battleActive, currentMVP]);
+
   return (
     <div style={{ 
       position: 'fixed',
@@ -341,7 +425,7 @@ export default function UserPage() {
       pointerEvents: 'none',
       overflow: 'hidden',
     }}>
-      {/* TOP GIFT LEADERBOARD - Big and Prominent */}
+      {/* TOP GIFT LEADERBOARD */}
       {topGifter && (
         <div style={{
           position: 'fixed',
@@ -416,7 +500,7 @@ export default function UserPage() {
          '🟡 CONNECTING...'}
       </div>
 
-      {/* LIKE ANIMATIONS - Ease-out effect */}
+      {/* LIKE ANIMATIONS - Constrained area (20% from sides, 20% from top, 40% from bottom) */}
       {likes.map((like) => (
         <div
           key={like.id}
@@ -478,6 +562,25 @@ export default function UserPage() {
         >
           {testMode ? '✨ COOL MODE' : '⚡ TEST'}
         </button>
+        
+        {/* Battle Test Button */}
+        {testMode && (
+          <button
+            onClick={testBattle}
+            style={{
+              padding: '8px 16px',
+              background: 'rgba(255,100,0,0.5)',
+              color: 'white',
+              border: '1px solid rgba(255,165,0,0.8)',
+              borderRadius: 20,
+              cursor: 'pointer',
+              fontSize: '12px',
+              backdropFilter: 'blur(5px)',
+            }}
+          >
+            ⚔️ TEST BATTLE
+          </button>
+        )}
         
         {connectionStatus === 'error' && (
           <button
@@ -548,17 +651,19 @@ export default function UserPage() {
           bottom: '20px',
           left: '20px',
           background: 'rgba(0,0,0,0.7)',
-          padding: '6px 12px',
+          padding: '8px 16px',
           borderRadius: '20px',
-          color: '#00FFFF',
-          fontSize: '12px',
+          color: '#FFD700',
+          fontSize: '14px',
+          fontWeight: 'bold',
           fontFamily: 'monospace',
           zIndex: 20,
           backdropFilter: 'blur(5px)',
-          border: '1px solid #00FFFF',
+          border: '1px solid #FFD700',
           animation: 'pulse 1s ease-in-out infinite',
+          boxShadow: '0 0 15px rgba(255,215,0,0.5)',
         }}>
-          ⚔️ BATTLE ACTIVE
+          ⚔️ BATTLE ACTIVE ⚔️
         </div>
       )}
 
@@ -874,8 +979,8 @@ export default function UserPage() {
         }
 
         @keyframes pulse {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 1; text-shadow: 0 0 5px cyan; }
+          0%, 100% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 8px gold; }
         }
 
         @keyframes giftImageFloat {
