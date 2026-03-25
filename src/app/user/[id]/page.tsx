@@ -9,6 +9,9 @@ export default function UserPage() {
   const userId = params?.id as string;
   
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
+  const [currentGiftImage, setCurrentGiftImage] = useState<string | null>(null);
+  const [currentMVP, setCurrentMVP] = useState<{ nickname: string; score: number } | null>(null);
+  const [battleActive, setBattleActive] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [animationState, setAnimationState] = useState<'none' | 'entering' | 'exiting'>('none');
   const [showEffects, setShowEffects] = useState(false);
@@ -38,8 +41,9 @@ export default function UserPage() {
     setFontSize(testSize);
   }, [currentGifter]);
 
-  const triggerGift = (name: string) => {
+  const triggerGift = (name: string, giftImage?: string) => {
     setCurrentGifter(name);
+    setCurrentGiftImage(giftImage || null);
     setAnimationState('entering');
     setShowEffects(true);
     
@@ -50,9 +54,15 @@ export default function UserPage() {
       
       setTimeout(() => {
         setCurrentGifter(null);
+        setCurrentGiftImage(null);
         setAnimationState('none');
       }, 1000);
     }, 3000);
+  };
+
+  const showMVPAlert = (nickname: string, score: number) => {
+    setCurrentMVP({ nickname, score });
+    setTimeout(() => setCurrentMVP(null), 4000);
   };
 
   const testGift = () => {
@@ -69,16 +79,78 @@ export default function UserPage() {
 
   useEffect(() => {
     if (!userId) return;
+    
     const socket = connectToSocket();
-    socket.on('connect', () => socket.emit('connect-tiktok', userId));
+    
+    socket.on('connect', () => {
+      console.log('🔌 Socket connected, connecting to TikTok...');
+      socket.emit('connect-tiktok', userId);
+    });
+    
     socket.on('tiktok-event', (event: any) => {
+      console.log('📡 Received event:', event.type);
+      
+      // GIFT EVENT (with image support)
       if (event.type === 'gift') {
-        const rawName = event.nickname || 'GIFT';
+        const rawName = event.nickname || event.username || 'GIFT';
         const cleanName = extractLetters(rawName);
-        triggerGift(cleanName);
+        triggerGift(cleanName, event.giftImage);
+      }
+      
+      // BATTLE START EVENT
+      if (event.type === 'battle_start') {
+        setBattleActive(true);
+        console.log(`⚔️ Battle started! Users: ${event.users?.map((u: any) => u.nickname).join(' vs ')}`);
+      }
+      
+      // BATTLE MVP EVENT (real-time updates)
+      if (event.type === 'battle_mvp') {
+        const mvp = event.mvp;
+        if (mvp && mvp.score > 0) {
+          console.log(`🏆 MVP: ${mvp.nickname} with ${mvp.score} points`);
+          showMVPAlert(mvp.nickname, mvp.score);
+        }
+      }
+      
+      // BATTLE END EVENT
+      if (event.type === 'battle_end') {
+        setBattleActive(false);
+        const finalMVP = event.mvp;
+        console.log(`🏁 Battle ended! Final MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
+        if (finalMVP) {
+          showMVPAlert(`${finalMVP.nickname} 🏆 WINNER!`, finalMVP.score);
+        }
+      }
+      
+      // FOLLOW EVENT
+      if (event.type === 'follow') {
+        console.log(`➕ ${event.nickname} followed!`);
+      }
+      
+      // CHAT EVENT
+      if (event.type === 'chat') {
+        console.log(`💬 ${event.nickname}: ${event.comment}`);
+      }
+      
+      // JOIN EVENT
+      if (event.type === 'join') {
+        console.log(`👤 ${event.nickname} joined`);
       }
     });
-    return () => disconnectSocket();
+    
+    socket.on('tiktok-status', (status: any) => {
+      console.log('📡 Status:', status.type, status.message);
+      if (status.type === 'error') {
+        console.error('Connection error:', status.message);
+      }
+    });
+    
+    return () => {
+      socket.off('connect');
+      socket.off('tiktok-event');
+      socket.off('tiktok-status');
+      disconnectSocket();
+    };
   }, [userId]);
 
   return (
@@ -119,6 +191,78 @@ export default function UserPage() {
           {testMode ? '✨ COOL MODE' : '⚡ TEST'}
         </button>
       </div>
+
+      {/* BATTLE MVP ALERT */}
+      {currentMVP && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg, #00FFFF, #9370DB, #4B0082)',
+          padding: '12px 24px',
+          borderRadius: '50px',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '18px',
+          fontFamily: 'Arial Black, sans-serif',
+          textShadow: '0 0 10px rgba(0,0,0,0.5)',
+          boxShadow: '0 0 30px rgba(0,255,255,0.6)',
+          zIndex: 20,
+          animation: 'slideDown 0.5s ease-out, glowPulse 1s ease-in-out infinite',
+          backdropFilter: 'blur(5px)',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          🏆 {currentMVP.nickname} - {currentMVP.score} POINTS 🏆
+        </div>
+      )}
+
+      {/* BATTLE ACTIVE INDICATOR */}
+      {battleActive && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '20px',
+          background: 'rgba(0,0,0,0.7)',
+          padding: '6px 12px',
+          borderRadius: '20px',
+          color: '#00FFFF',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          zIndex: 20,
+          backdropFilter: 'blur(5px)',
+          border: '1px solid #00FFFF',
+          animation: 'pulse 1s ease-in-out infinite',
+        }}>
+          ⚔️ BATTLE ACTIVE
+        </div>
+      )}
+
+      {/* GIFT IMAGE OVERLAY (if gift has image) */}
+      {currentGiftImage && currentGifter && (
+        <div style={{
+          position: 'fixed',
+          top: '30%',
+          right: '20px',
+          width: '80px',
+          height: '80px',
+          zIndex: 15,
+          animation: 'giftImageFloat 1.5s ease-out forwards',
+          pointerEvents: 'none',
+        }}>
+          <img 
+            src={currentGiftImage} 
+            alt="gift"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 0 20px cyan)',
+            }}
+          />
+        </div>
+      )}
 
       {/* COOL COLOR EFFECTS - Blues, Purples, Cyans */}
       {showEffects && (
@@ -251,7 +395,6 @@ export default function UserPage() {
               fontSize: `${fontSize}px`,
               fontWeight: '900',
               fontFamily: 'Arial Black, Impact, sans-serif',
-              // COOL gradient - blues and purples (contrasts with orange skin)
               background: 'linear-gradient(135deg, #00FFFF, #4169E1, #9370DB, #8A2BE2, #4B0082)',
               backgroundSize: '400% 400%',
               WebkitBackgroundClip: 'text',
@@ -259,7 +402,6 @@ export default function UserPage() {
               backgroundClip: 'text',
               textTransform: 'uppercase',
               whiteSpace: 'nowrap',
-              // Cool-toned glows
               filter: 'drop-shadow(0 0 40px rgba(0,255,255,0.8)) drop-shadow(0 0 80px rgba(147,112,219,0.6)) drop-shadow(0 0 120px rgba(75,0,130,0.4))',
               animation: animationState === 'entering' 
                 ? 'coolEnter 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards' 
@@ -383,6 +525,50 @@ export default function UserPage() {
             opacity: 0;
             transform: scale(25);
             box-shadow: 0 0 200px currentColor;
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        @keyframes glowPulse {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(0,255,255,0.6);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(0,255,255,0.9), 0 0 20px rgba(147,112,219,0.6);
+          }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; text-shadow: 0 0 5px cyan; }
+        }
+
+        @keyframes giftImageFloat {
+          0% {
+            opacity: 0;
+            transform: translateX(50px) scale(0.5);
+          }
+          20% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+          80% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateX(-50px) scale(0.5);
           }
         }
 
