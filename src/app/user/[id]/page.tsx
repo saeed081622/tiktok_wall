@@ -8,6 +8,8 @@ export default function UserPage() {
   const params = useParams();
   const userId = params?.id as string;
   
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
   const [currentGiftImage, setCurrentGiftImage] = useState<string | null>(null);
   const [currentMVP, setCurrentMVP] = useState<{ nickname: string; score: number } | null>(null);
@@ -17,6 +19,8 @@ export default function UserPage() {
   const [showEffects, setShowEffects] = useState(false);
   const [fontSize, setFontSize] = useState(80);
   const textRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<any>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   const extractLetters = (name: string): string => {
     if (!name) return 'GIFT';
@@ -71,24 +75,61 @@ export default function UserPage() {
     triggerGift(name);
   };
 
+  // Test mode for gifts
   useEffect(() => {
     if (!testMode) return;
     const interval = setInterval(testGift, 5000);
     return () => clearInterval(interval);
   }, [testMode]);
 
+  // Socket connection and TikTok connection
   useEffect(() => {
     if (!userId) return;
     
+    // Clear any pending reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    
+    setConnectionStatus('connecting');
+    setConnectionError(null);
+    
+    console.log(`🔌 Initializing connection for user: ${userId}`);
+    
     const socket = connectToSocket();
+    socketRef.current = socket;
     
-    socket.on('connect', () => {
-      console.log('🔌 Socket connected, connecting to TikTok...');
+    // Handle socket connection
+    const onConnect = () => {
+      console.log('✅ Socket connected, sending connect-tiktok event');
       socket.emit('connect-tiktok', userId);
-    });
+    };
     
-    socket.on('tiktok-event', (event: any) => {
-      console.log('📡 Received event:', event.type);
+    // Handle connection result from server
+    const onConnectionResult = (result: any) => {
+      console.log('📡 Connection result:', result);
+      if (result.success) {
+        setConnectionStatus('connected');
+        setConnectionError(null);
+        console.log(`✅ Connected to TikTok! Room ID: ${result.roomId}`);
+      } else {
+        setConnectionStatus('error');
+        setConnectionError(result.error || 'Failed to connect to TikTok');
+        console.error('❌ Connection failed:', result.error);
+        
+        // Auto reconnect after 5 seconds on error
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Attempting to reconnect...');
+          if (socket.connected) {
+            socket.emit('connect-tiktok', userId);
+          }
+        }, 5000);
+      }
+    };
+    
+    // Handle TikTok events
+    const onTikTokEvent = (event: any) => {
+      console.log('📡 TikTok event:', event.type, event);
       
       // GIFT EVENT (with image support)
       if (event.type === 'gift') {
@@ -100,7 +141,8 @@ export default function UserPage() {
       // BATTLE START EVENT
       if (event.type === 'battle_start') {
         setBattleActive(true);
-        console.log(`⚔️ Battle started! Users: ${event.users?.map((u: any) => u.nickname).join(' vs ')}`);
+        const battleUsers = event.users?.map((u: any) => u.nickname).join(' vs ') || 'unknown';
+        console.log(`⚔️ Battle started! ${battleUsers}`);
       }
       
       // BATTLE MVP EVENT (real-time updates)
@@ -136,20 +178,79 @@ export default function UserPage() {
       if (event.type === 'join') {
         console.log(`👤 ${event.nickname} joined`);
       }
-    });
-    
-    socket.on('tiktok-status', (status: any) => {
-      console.log('📡 Status:', status.type, status.message);
-      if (status.type === 'error') {
-        console.error('Connection error:', status.message);
+      
+      // SYSTEM EVENT
+      if (event.type === 'system') {
+        if (event.subType === 'connected') {
+          setConnectionStatus('connected');
+          setConnectionError(null);
+          console.log(`✅ ${event.message}`);
+        } else if (event.subType === 'disconnected') {
+          setConnectionStatus('connecting');
+          console.log(`🔌 ${event.message}`);
+          // Attempt to reconnect on disconnect
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (socket.connected) {
+              socket.emit('connect-tiktok', userId);
+            }
+          }, 3000);
+        } else if (event.subType === 'error') {
+          setConnectionStatus('error');
+          setConnectionError(event.message);
+          console.error(`❌ ${event.message}`);
+        }
       }
-    });
+    };
     
+    // Handle socket disconnect
+    const onDisconnect = (reason: string) => {
+      console.log(`🔌 Socket disconnected: ${reason}`);
+      setConnectionStatus('connecting');
+      
+      // Attempt to reconnect on server disconnect
+      if (reason === 'io server disconnect') {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Reconnecting...');
+          socket.connect();
+        }, 1000);
+      }
+    };
+    
+    // Handle socket errors
+    const onSocketError = (error: Error) => {
+      console.error('❌ Socket error:', error);
+      setConnectionStatus('error');
+      setConnectionError(error.message);
+    };
+    
+    // Register event handlers
+    socket.on('connect', onConnect);
+    socket.on('connection-result', onConnectionResult);
+    socket.on('tiktok-event', onTikTokEvent);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onSocketError);
+    
+    // If socket is already connected, trigger immediately
+    if (socket.connected) {
+      onConnect();
+    }
+    
+    // Cleanup
     return () => {
-      socket.off('connect');
-      socket.off('tiktok-event');
-      socket.off('tiktok-status');
-      disconnectSocket();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      socket.off('connect', onConnect);
+      socket.off('connection-result', onConnectionResult);
+      socket.off('tiktok-event', onTikTokEvent);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onSocketError);
+      
+      if (socketRef.current) {
+        socket.emit('disconnect-tiktok');
+        disconnectSocket();
+        socketRef.current = null;
+      }
     };
   }, [userId]);
 
@@ -167,6 +268,29 @@ export default function UserPage() {
       pointerEvents: 'none',
       overflow: 'hidden',
     }}>
+      {/* Connection Status Indicator */}
+      <div style={{
+        position: 'fixed',
+        top: 10,
+        right: 10,
+        pointerEvents: 'auto',
+        zIndex: 10000,
+        background: connectionStatus === 'connected' ? 'rgba(0,255,0,0.3)' : 
+                   connectionStatus === 'error' ? 'rgba(255,0,0,0.3)' : 'rgba(255,255,0,0.3)',
+        padding: '4px 12px',
+        borderRadius: 20,
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        color: 'white',
+        backdropFilter: 'blur(5px)',
+        border: connectionStatus === 'connected' ? '1px solid #0f0' :
+                connectionStatus === 'error' ? '1px solid #f00' : '1px solid #ff0',
+      }}>
+        {connectionStatus === 'connected' ? '🟢 LIVE' : 
+         connectionStatus === 'error' ? `🔴 ERROR${connectionError ? ': ' + connectionError.substring(0, 30) : ''}` : 
+         '🟡 CONNECTING...'}
+      </div>
+
       {/* Test button */}
       <div style={{
         position: 'fixed',
@@ -174,6 +298,8 @@ export default function UserPage() {
         right: 10,
         pointerEvents: 'auto',
         zIndex: 10000,
+        display: 'flex',
+        gap: '10px',
       }}>
         <button
           onClick={() => setTestMode(!testMode)}
@@ -190,6 +316,30 @@ export default function UserPage() {
         >
           {testMode ? '✨ COOL MODE' : '⚡ TEST'}
         </button>
+        
+        {connectionStatus === 'error' && (
+          <button
+            onClick={() => {
+              if (socketRef.current?.connected) {
+                socketRef.current.emit('connect-tiktok', userId);
+                setConnectionStatus('connecting');
+                setConnectionError(null);
+              }
+            }}
+            style={{
+              padding: '8px 16px',
+              background: 'rgba(255,100,0,0.3)',
+              color: 'white',
+              border: '1px solid rgba(255,100,0,0.5)',
+              borderRadius: 20,
+              cursor: 'pointer',
+              fontSize: '12px',
+              backdropFilter: 'blur(5px)',
+            }}
+          >
+            🔄 RETRY
+          </button>
+        )}
       </div>
 
       {/* BATTLE MVP ALERT */}
@@ -377,7 +527,7 @@ export default function UserPage() {
         </div>
       )}
 
-      {/* Name with COOL colors that POP against orange skin */}
+      {/* Name with COOL colors */}
       {currentGifter && (
         <div style={{
           paddingLeft: '8vw',
