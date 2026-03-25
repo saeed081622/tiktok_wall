@@ -18,9 +18,11 @@ export default function UserPage() {
   const [animationState, setAnimationState] = useState<'none' | 'entering' | 'exiting'>('none');
   const [showEffects, setShowEffects] = useState(false);
   const [fontSize, setFontSize] = useState(80);
+  const [likes, setLikes] = useState<Array<{ id: number; username: string; x: number; y: number }>>([]);
   const textRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  let nextLikeId = useRef(0);
 
   const extractLetters = (name: string): string => {
     if (!name) return 'GIFT';
@@ -64,6 +66,20 @@ export default function UserPage() {
     }, 3000);
   };
 
+  // Like animation handler
+  const addLike = (username: string) => {
+    const id = nextLikeId.current++;
+    const x = Math.random() * 80 + 10; // Random position between 10% and 90%
+    const y = Math.random() * 60 + 20; // Random position between 20% and 80%
+    
+    setLikes(prev => [...prev, { id, username: username || 'someone', x, y }]);
+    
+    // Remove like after animation completes
+    setTimeout(() => {
+      setLikes(prev => prev.filter(like => like.id !== id));
+    }, 2000);
+  };
+
   const showMVPAlert = (nickname: string, score: number) => {
     setCurrentMVP({ nickname, score });
     setTimeout(() => setCurrentMVP(null), 4000);
@@ -75,18 +91,28 @@ export default function UserPage() {
     triggerGift(name);
   };
 
+  // Test like
+  const testLike = () => {
+    const names = ['carlyp7996', 'alex123', 'user456', 'fan789'];
+    const name = names[Math.floor(Math.random() * names.length)];
+    addLike(name);
+  };
+
   // Test mode for gifts
   useEffect(() => {
     if (!testMode) return;
-    const interval = setInterval(testGift, 5000);
-    return () => clearInterval(interval);
+    const giftInterval = setInterval(testGift, 5000);
+    const likeInterval = setInterval(testLike, 2000);
+    return () => {
+      clearInterval(giftInterval);
+      clearInterval(likeInterval);
+    };
   }, [testMode]);
 
   // Socket connection and TikTok connection
   useEffect(() => {
     if (!userId) return;
     
-    // Clear any pending reconnect
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -99,13 +125,11 @@ export default function UserPage() {
     const socket = connectToSocket();
     socketRef.current = socket;
     
-    // Handle socket connection
     const onConnect = () => {
       console.log('✅ Socket connected, sending connect-tiktok event');
       socket.emit('connect-tiktok', userId);
     };
     
-    // Handle connection result from server
     const onConnectionResult = (result: any) => {
       console.log('📡 Connection result:', result);
       if (result.success) {
@@ -117,7 +141,6 @@ export default function UserPage() {
         setConnectionError(result.error || 'Failed to connect to TikTok');
         console.error('❌ Connection failed:', result.error);
         
-        // Auto reconnect after 5 seconds on error
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('🔄 Attempting to reconnect...');
           if (socket.connected) {
@@ -127,15 +150,20 @@ export default function UserPage() {
       }
     };
     
-    // Handle TikTok events
     const onTikTokEvent = (event: any) => {
       console.log('📡 TikTok event:', event.type, event);
       
-      // GIFT EVENT (with image support)
+      // GIFT EVENT
       if (event.type === 'gift') {
         const rawName = event.nickname || event.username || 'GIFT';
         const cleanName = extractLetters(rawName);
         triggerGift(cleanName, event.giftImage);
+      }
+      
+      // LIKE EVENT - NEW!
+      if (event.type === 'like') {
+        console.log(`❤️ Like from ${event.nickname} (${event.count} likes, total: ${event.total})`);
+        addLike(event.nickname);
       }
       
       // BATTLE START EVENT
@@ -145,7 +173,7 @@ export default function UserPage() {
         console.log(`⚔️ Battle started! ${battleUsers}`);
       }
       
-      // BATTLE MVP EVENT (real-time updates)
+      // BATTLE MVP EVENT
       if (event.type === 'battle_mvp') {
         const mvp = event.mvp;
         if (mvp && mvp.score > 0) {
@@ -188,7 +216,6 @@ export default function UserPage() {
         } else if (event.subType === 'disconnected') {
           setConnectionStatus('connecting');
           console.log(`🔌 ${event.message}`);
-          // Attempt to reconnect on disconnect
           reconnectTimeoutRef.current = setTimeout(() => {
             if (socket.connected) {
               socket.emit('connect-tiktok', userId);
@@ -202,12 +229,10 @@ export default function UserPage() {
       }
     };
     
-    // Handle socket disconnect
     const onDisconnect = (reason: string) => {
       console.log(`🔌 Socket disconnected: ${reason}`);
       setConnectionStatus('connecting');
       
-      // Attempt to reconnect on server disconnect
       if (reason === 'io server disconnect') {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('🔄 Reconnecting...');
@@ -216,26 +241,22 @@ export default function UserPage() {
       }
     };
     
-    // Handle socket errors
     const onSocketError = (error: Error) => {
       console.error('❌ Socket error:', error);
       setConnectionStatus('error');
       setConnectionError(error.message);
     };
     
-    // Register event handlers
     socket.on('connect', onConnect);
     socket.on('connection-result', onConnectionResult);
     socket.on('tiktok-event', onTikTokEvent);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onSocketError);
     
-    // If socket is already connected, trigger immediately
     if (socket.connected) {
       onConnect();
     }
     
-    // Cleanup
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -290,6 +311,43 @@ export default function UserPage() {
          connectionStatus === 'error' ? `🔴 ERROR${connectionError ? ': ' + connectionError.substring(0, 30) : ''}` : 
          '🟡 CONNECTING...'}
       </div>
+
+      {/* LIKE ANIMATIONS - NEW! */}
+      {likes.map((like) => (
+        <div
+          key={like.id}
+          style={{
+            position: 'fixed',
+            left: `${like.x}%`,
+            top: `${like.y}%`,
+            animation: 'likeFloat 2s ease-out forwards',
+            pointerEvents: 'none',
+            zIndex: 25,
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'linear-gradient(135deg, #FF3366, #FF6B6B)',
+            padding: '8px 16px',
+            borderRadius: '50px',
+            boxShadow: '0 0 20px rgba(255,51,102,0.5)',
+            backdropFilter: 'blur(5px)',
+          }}>
+            <span style={{ fontSize: '24px' }}>❤️</span>
+            <span style={{
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '16px',
+              fontFamily: 'Arial, sans-serif',
+              textShadow: '0 0 5px rgba(0,0,0,0.3)',
+            }}>
+              {like.username}
+            </span>
+          </div>
+        </div>
+      ))}
 
       {/* Test button */}
       <div style={{
@@ -389,7 +447,7 @@ export default function UserPage() {
         </div>
       )}
 
-      {/* GIFT IMAGE OVERLAY (if gift has image) */}
+      {/* GIFT IMAGE OVERLAY */}
       {currentGiftImage && currentGifter && (
         <div style={{
           position: 'fixed',
@@ -414,7 +472,7 @@ export default function UserPage() {
         </div>
       )}
 
-      {/* COOL COLOR EFFECTS - Blues, Purples, Cyans */}
+      {/* COOL COLOR EFFECTS */}
       {showEffects && (
         <div style={{
           position: 'absolute',
@@ -425,7 +483,7 @@ export default function UserPage() {
           pointerEvents: 'none',
           zIndex: 5,
         }}>
-          {/* 1. COOL LIGHTNING - Electric Blue */}
+          {/* Lightning */}
           {[...Array(3)].map((_, i) => (
             <div
               key={`bolt-${i}`}
@@ -444,7 +502,7 @@ export default function UserPage() {
             />
           ))}
 
-          {/* 2. COOL EXPLOSION RINGS - Purple to Blue */}
+          {/* Explosion Rings */}
           {[...Array(5)].map((_, i) => (
             <div
               key={`ring-${i}`}
@@ -464,7 +522,7 @@ export default function UserPage() {
             />
           ))}
 
-          {/* 3. COOL SPARKLE SHOWER - Cyan, Purple, Blue */}
+          {/* Sparkles */}
           {[...Array(40)].map((_, i) => {
             const colors = ['#00FFFF', '#4169E1', '#9370DB', '#8A2BE2', '#4B0082'];
             return (
@@ -485,49 +543,10 @@ export default function UserPage() {
               />
             );
           })}
-
-          {/* 4. COOL ENERGY WAVES */}
-          {[...Array(6)].map((_, i) => (
-            <div
-              key={`wave-${i}`}
-              style={{
-                position: 'absolute',
-                top: `${10 + i * 15}%`,
-                left: '-10%',
-                width: '120%',
-                height: '2px',
-                background: `linear-gradient(90deg, transparent, #00FFFF, #9370DB, #4B0082, transparent)`,
-                filter: 'blur(2px)',
-                animation: `energyWave ${2 + i * 0.3}s ease-out infinite`,
-                opacity: 0.3,
-                transform: `rotate(${i * 5}deg)`,
-              }}
-            />
-          ))}
-
-          {/* 5. COOL CRYSTAL BURSTS */}
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={`crystal-${i}`}
-              style={{
-                position: 'absolute',
-                top: `${30 + Math.random() * 40}%`,
-                left: `${30 + Math.random() * 40}%`,
-                width: '6px',
-                height: '6px',
-                background: `hsl(${240 + Math.random() * 60}, 100%, 70%)`,
-                borderRadius: '50%',
-                boxShadow: `0 0 40px currentColor`,
-                animation: `crystalBurst 1.2s ease-out forwards`,
-                animationDelay: `${Math.random() * 0.4}s`,
-                filter: 'blur(1px)',
-              }}
-            />
-          ))}
         </div>
       )}
 
-      {/* Name with COOL colors */}
+      {/* Name */}
       {currentGifter && (
         <div style={{
           paddingLeft: '8vw',
@@ -614,6 +633,25 @@ export default function UserPage() {
           }
         }
 
+        @keyframes likeFloat {
+          0% {
+            opacity: 0;
+            transform: translateY(0) scale(0.5);
+          }
+          20% {
+            opacity: 1;
+            transform: translateY(-20px) scale(1);
+          }
+          80% {
+            opacity: 1;
+            transform: translateY(-60px) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-100px) scale(0.8);
+          }
+        }
+
         @keyframes lightningFlash {
           0% { opacity: 0; transform: scaleY(0); }
           20% { opacity: 1; transform: scaleY(1); }
@@ -648,33 +686,6 @@ export default function UserPage() {
           100% {
             transform: translateY(110vh) rotate(360deg);
             opacity: 0;
-          }
-        }
-
-        @keyframes energyWave {
-          0% {
-            transform: translateX(-100%) rotate(0deg);
-            opacity: 0.3;
-          }
-          50% {
-            opacity: 0.6;
-          }
-          100% {
-            transform: translateX(100%) rotate(0deg);
-            opacity: 0;
-          }
-        }
-
-        @keyframes crystalBurst {
-          0% {
-            opacity: 1;
-            transform: scale(1);
-            box-shadow: 0 0 50px currentColor;
-          }
-          100% {
-            opacity: 0;
-            transform: scale(25);
-            box-shadow: 0 0 200px currentColor;
           }
         }
 
