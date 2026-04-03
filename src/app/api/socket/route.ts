@@ -22,6 +22,15 @@ export async function GET(req: NextRequest) {
             socketServer.on('connection', (socket) => {
                 console.log('Client connected:', socket.id);
 
+                // ========== NEW: CONTROL PANEL EVENT FORWARDER ==========
+                // This listens for commands from the control panel and forwards them to all connected clients
+                socket.on('control-event', (eventName: string, eventData: any) => {
+                    console.log(`🎮 Control event from ${socket.id}: ${eventName}`, eventData);
+                    // Forward to ALL connected clients (including the overlay and other control panels)
+                    socketServer.emit(eventName, eventData);
+                });
+
+                // Your existing TikTok connection code
                 socket.on('connect-tiktok', async (username: string) => {
                     try {
                         const result = await connectToTikTok(username);

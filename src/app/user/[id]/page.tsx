@@ -21,6 +21,7 @@ export default function UserPage() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [currentGifter, setCurrentGifter] = useState<string | null>(null);
   const [currentGiftImage, setCurrentGiftImage] = useState<string | null>(null);
+  const [currentGiftName, setCurrentGiftName] = useState<string>('');
   const [topGifter, setTopGifter] = useState<TopGifter | null>(null);
   const [currentMVP, setCurrentMVP] = useState<{ nickname: string; score: number } | null>(null);
   const [battleActive, setBattleActive] = useState(false);
@@ -34,6 +35,7 @@ export default function UserPage() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   let nextLikeId = useRef(0);
   const mvpTimeoutRef = useRef<NodeJS.Timeout>();
+  const giftTimeoutRef = useRef<NodeJS.Timeout>();
 
   const extractLetters = (name: string): string => {
     if (!name) return 'GIFT';
@@ -75,25 +77,34 @@ export default function UserPage() {
       });
     }
 
+    setCurrentGiftName(giftName || '');
     setCurrentGifter(name);
     setCurrentGiftImage(giftImage || null);
     setAnimationState('entering');
     setShowEffects(true);
     
+    // Clear previous timeout
+    if (giftTimeoutRef.current) {
+      clearTimeout(giftTimeoutRef.current);
+    }
+    
+    // Effects last 2 seconds
     setTimeout(() => setShowEffects(false), 2000);
     
-    setTimeout(() => {
+    // Animation sequence
+    giftTimeoutRef.current = setTimeout(() => {
       setAnimationState('exiting');
       
       setTimeout(() => {
         setCurrentGifter(null);
         setCurrentGiftImage(null);
+        setCurrentGiftName('');
         setAnimationState('none');
       }, 1000);
     }, 3000);
   };
 
-  // Like animation with constrained area (20% from sides, 20% from top, 40% from bottom)
+  // Like animation - scale up with gradual fade from start
   const addLike = (username: string) => {
     const id = nextLikeId.current++;
     // X: between 20% and 80% (20% away from both sides)
@@ -103,21 +114,19 @@ export default function UserPage() {
     
     setLikes(prev => [...prev, { id, username: username || 'someone', x, y }]);
     
-    // Remove like after animation completes
+    // Remove like after animation completes (1.5 seconds)
     setTimeout(() => {
       setLikes(prev => prev.filter(like => like.id !== id));
-    }, 2000);
+    }, 1500);
   };
 
   const showMVPAlert = (nickname: string, score: number) => {
-    // Clear previous timeout
     if (mvpTimeoutRef.current) {
       clearTimeout(mvpTimeoutRef.current);
     }
     
     setCurrentMVP({ nickname, score });
     
-    // Set timeout to hide MVP after 15 seconds
     mvpTimeoutRef.current = setTimeout(() => {
       setCurrentMVP(null);
     }, 15000);
@@ -125,15 +134,15 @@ export default function UserPage() {
 
   const testGift = () => {
     const testGifters = [
-      { name: '👑 ALEXANDER', diamonds: 5000, gift: 'Dragon', username: 'alexander123', nickname: 'Alexander' },
-      { name: '⚡ VICTORIA', diamonds: 3500, gift: 'Rose', username: 'victoria456', nickname: 'Victoria' },
-      { name: '🔥 CHRISTOPHER', diamonds: 8000, gift: 'Galaxy', username: 'christopher789', nickname: 'Christopher' },
-      { name: '💎 ELIZABETH', diamonds: 12000, gift: 'Universe', username: 'elizabeth999', nickname: 'Elizabeth' },
-      { name: '🌟 JONATHAN', diamonds: 2000, gift: 'Heart', username: 'jonathan111', nickname: 'Jonathan' },
+      { name: '👑 ALEXANDER', diamonds: 5000, gift: 'Dragon', username: 'alexander123', nickname: 'Alexander', image: 'https://cdn-icons-png.flaticon.com/512/1864/1864514.png' },
+      { name: '⚡ VICTORIA', diamonds: 3500, gift: 'Rose', username: 'victoria456', nickname: 'Victoria', image: 'https://cdn-icons-png.flaticon.com/512/2103/2103735.png' },
+      { name: '🔥 CHRISTOPHER', diamonds: 8000, gift: 'Galaxy', username: 'christopher789', nickname: 'Christopher', image: 'https://cdn-icons-png.flaticon.com/512/1164/1164845.png' },
+      { name: '💎 ELIZABETH', diamonds: 12000, gift: 'Universe', username: 'elizabeth999', nickname: 'Elizabeth', image: 'https://cdn-icons-png.flaticon.com/512/190/190411.png' },
+      { name: '🌟 JONATHAN', diamonds: 2000, gift: 'Heart', username: 'jonathan111', nickname: 'Jonathan', image: 'https://cdn-icons-png.flaticon.com/512/833/833472.png' },
     ];
     const gifter = testGifters[Math.floor(Math.random() * testGifters.length)];
     const cleanName = extractLetters(gifter.name);
-    triggerGift(cleanName, undefined, gifter.gift, gifter.diamonds, gifter.username, gifter.nickname);
+    triggerGift(cleanName, gifter.image, gifter.gift, gifter.diamonds, gifter.username, gifter.nickname);
   };
 
   const testLike = () => {
@@ -144,7 +153,6 @@ export default function UserPage() {
 
   const testBattle = () => {
     console.log('🧪 TEST: Simulating battle events');
-    // Simulate battle start
     onBattleStart({
       type: 'battle_start',
       battleId: 'test_battle_123',
@@ -155,7 +163,6 @@ export default function UserPage() {
       timestamp: Date.now()
     });
     
-    // Simulate MVP updates
     setTimeout(() => {
       onBattleMVP({
         type: 'battle_mvp',
@@ -189,7 +196,6 @@ export default function UserPage() {
     }, 8000);
   };
 
-  // Manual handlers for testing
   const onBattleStart = (event: any) => {
     console.log('⚔️ Battle started!', event);
     setBattleActive(true);
@@ -212,12 +218,11 @@ export default function UserPage() {
     }
   };
 
-  // Test mode for gifts, likes, and battles
   useEffect(() => {
     if (!testMode) return;
     const giftInterval = setInterval(testGift, 8000);
     const likeInterval = setInterval(testLike, 1500);
-    const battleInterval = setInterval(testBattle, 30000); // Test battle every 30 seconds
+    const battleInterval = setInterval(testBattle, 30000);
     return () => {
       clearInterval(giftInterval);
       clearInterval(likeInterval);
@@ -269,7 +274,6 @@ export default function UserPage() {
     const onTikTokEvent = (event: any) => {
       console.log('📡 TikTok event:', event.type, event);
       
-      // GIFT EVENT
       if (event.type === 'gift') {
         const rawName = event.nickname || event.username || 'GIFT';
         const cleanName = extractLetters(rawName);
@@ -283,57 +287,45 @@ export default function UserPage() {
         );
       }
       
-      // LIKE EVENT
       if (event.type === 'like') {
         console.log(`❤️ Like from ${event.nickname} (${event.count} likes, total: ${event.total})`);
         addLike(event.nickname);
       }
       
-      // BATTLE START EVENT
       if (event.type === 'battle_start') {
         console.log('⚔️ BATTLE START RECEIVED:', event);
         setBattleActive(true);
-        const battleUsers = event.users?.map((u: any) => u.nickname).join(' vs ') || 'unknown';
-        console.log(`⚔️ Battle started! ${battleUsers}`);
       }
       
-      // BATTLE MVP EVENT
       if (event.type === 'battle_mvp') {
         console.log('🏆 BATTLE MVP RECEIVED:', event);
         const mvp = event.mvp;
         if (mvp && mvp.score > 0) {
-          console.log(`🏆 MVP: ${mvp.nickname} with ${mvp.score} points`);
           showMVPAlert(mvp.nickname, mvp.score);
         }
       }
       
-      // BATTLE END EVENT
       if (event.type === 'battle_end') {
         console.log('🏁 BATTLE END RECEIVED:', event);
         setBattleActive(false);
         const finalMVP = event.mvp;
-        console.log(`🏁 Battle ended! Final MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
         if (finalMVP) {
           showMVPAlert(`${finalMVP.nickname} 🏆 WINNER!`, finalMVP.score);
         }
       }
       
-      // FOLLOW EVENT
       if (event.type === 'follow') {
         console.log(`➕ ${event.nickname} followed!`);
       }
       
-      // CHAT EVENT
       if (event.type === 'chat') {
         console.log(`💬 ${event.nickname}: ${event.comment}`);
       }
       
-      // JOIN EVENT
       if (event.type === 'join') {
         console.log(`👤 ${event.nickname} joined`);
       }
       
-      // SYSTEM EVENT
       if (event.type === 'system') {
         if (event.subType === 'connected') {
           setConnectionStatus('connected');
@@ -390,6 +382,9 @@ export default function UserPage() {
       if (mvpTimeoutRef.current) {
         clearTimeout(mvpTimeoutRef.current);
       }
+      if (giftTimeoutRef.current) {
+        clearTimeout(giftTimeoutRef.current);
+      }
       socket.off('connect', onConnect);
       socket.off('connection-result', onConnectionResult);
       socket.off('tiktok-event', onTikTokEvent);
@@ -404,7 +399,6 @@ export default function UserPage() {
     };
   }, [userId]);
 
-  // Debug: Check if battle events are registered
   useEffect(() => {
     console.log('🔍 Checking battle event handlers...');
     console.log('Battle Active:', battleActive);
@@ -425,27 +419,28 @@ export default function UserPage() {
       pointerEvents: 'none',
       overflow: 'hidden',
     }}>
-      {/* TOP GIFT LEADERBOARD */}
+      {/* TOP GIFT LEADERBOARD - Bottom Left (40% from bottom, 10% from left) */}
       {topGifter && (
         <div style={{
           position: 'fixed',
-          top: '20px',
-          left: '20px',
-          background: 'linear-gradient(135deg, rgba(0,0,0,0.8), rgba(50,0,80,0.9))',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '20px',
-          padding: '16px 24px',
+          bottom: '40%',
+          left: '10%',
+          transform: 'translateY(50%)',
+          background: 'linear-gradient(135deg, rgba(0,0,0,0.85), rgba(50,0,80,0.95))',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '24px',
+          padding: '20px 28px',
           border: '2px solid gold',
-          boxShadow: '0 0 40px rgba(255,215,0,0.5), 0 0 20px rgba(255,0,255,0.3)',
+          boxShadow: '0 0 50px rgba(255,215,0,0.6), 0 0 25px rgba(255,0,255,0.4)',
           zIndex: 30,
           animation: 'leaderboardGlow 2s ease-in-out infinite, slideInLeft 0.5s ease-out',
           pointerEvents: 'auto',
-          minWidth: '280px',
+          minWidth: '300px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '32px' }}>👑</span>
+          {/* <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '36px', animation: 'crownSpin 3s ease-in-out infinite' }}>👑</span>
             <span style={{ 
-              fontSize: '20px', 
+              fontSize: '22px', 
               fontWeight: 'bold',
               background: 'linear-gradient(135deg, gold, #ffd700, #ffb347)',
               WebkitBackgroundClip: 'text',
@@ -454,24 +449,27 @@ export default function UserPage() {
             }}>
               TOP GIFT GIVER
             </span>
-          </div>
+          </div> */}
           <div style={{ 
-            fontSize: '28px', 
+            fontSize: '32px', 
             fontWeight: '900',
             color: '#FFD700',
-            textShadow: '0 0 10px rgba(255,215,0,0.5)',
-            marginBottom: '8px'
+            textShadow: '0 0 15px rgba(255,215,0,0.8)',
+            marginBottom: '12px',
+            letterSpacing: '1px'
           }}>
             {topGifter.nickname}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px' }}>
             <div>
-              <div style={{ fontSize: '12px', color: '#aaa' }}>GIFT</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff' }}>{topGifter.giftName}</div>
+              <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>GIFT</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🎁 {topGifter.giftName}
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: '12px', color: '#aaa' }}>DIAMONDS</div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#FFD700' }}>💎 {topGifter.totalDiamonds.toLocaleString()}</div>
+              <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>DIAMONDS</div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#FFD700' }}>💎 {topGifter.totalDiamonds.toLocaleString()}</div>
             </div>
           </div>
         </div>
@@ -500,7 +498,7 @@ export default function UserPage() {
          '🟡 CONNECTING...'}
       </div>
 
-      {/* LIKE ANIMATIONS - Constrained area (20% from sides, 20% from top, 40% from bottom) */}
+      {/* LIKE ANIMATIONS - Scale up with gradual fade from start */}
       {likes.map((like) => (
         <div
           key={like.id}
@@ -508,7 +506,7 @@ export default function UserPage() {
             position: 'fixed',
             left: `${like.x}%`,
             top: `${like.y}%`,
-            animation: 'likeFloatEase 2s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards',
+            animation: 'likeFloatScale 1.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards',
             pointerEvents: 'none',
             zIndex: 25,
           }}
@@ -516,20 +514,22 @@ export default function UserPage() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            background: 'linear-gradient(135deg, #FF3366, #FF6B6B)',
-            padding: '8px 16px',
-            borderRadius: '50px',
-            boxShadow: '0 0 20px rgba(255,51,102,0.5)',
-            backdropFilter: 'blur(5px)',
+            gap: '10px',
+            background: 'linear-gradient(135deg, #FF3366, #FF6B6B, #FF1493)',
+            padding: '10px 20px',
+            borderRadius: '60px',
+            boxShadow: '0 0 25px rgba(255,51,102,0.6), 0 0 10px rgba(255,20,147,0.4)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.3)',
           }}>
-            <span style={{ fontSize: '24px', animation: 'heartBeat 0.3s ease-out' }}>❤️</span>
+            <span style={{ fontSize: '28px', animation: 'heartBeatScale 0.4s ease-out' }}>❤️</span>
             <span style={{
               color: 'white',
               fontWeight: 'bold',
-              fontSize: '16px',
-              fontFamily: 'Arial, sans-serif',
-              textShadow: '0 0 5px rgba(0,0,0,0.3)',
+              fontSize: '18px',
+              fontFamily: 'Arial Black, sans-serif',
+              textShadow: '0 0 8px rgba(0,0,0,0.5)',
+              letterSpacing: '0.5px',
             }}>
               {like.username}
             </span>
@@ -563,7 +563,6 @@ export default function UserPage() {
           {testMode ? '✨ COOL MODE' : '⚡ TEST'}
         </button>
         
-        {/* Battle Test Button */}
         {testMode && (
           <button
             onClick={testBattle}
@@ -607,7 +606,7 @@ export default function UserPage() {
         )}
       </div>
 
-      {/* BATTLE MVP ALERT - Enhanced Animation */}
+      {/* BATTLE MVP ALERT */}
       {currentMVP && (
         <div style={{
           position: 'fixed',
@@ -616,30 +615,30 @@ export default function UserPage() {
           transform: 'translate(-50%, -50%)',
           background: 'linear-gradient(135deg, #FFD700, #FFA500, #FF4500, #FF1493)',
           backgroundSize: '300% 300%',
-          padding: '24px 48px',
-          borderRadius: '60px',
+          padding: '28px 56px',
+          borderRadius: '70px',
           color: 'white',
           fontWeight: 'bold',
-          fontSize: '32px',
+          fontSize: '36px',
           fontFamily: 'Arial Black, Impact, sans-serif',
-          textShadow: '0 0 20px rgba(0,0,0,0.5), 0 0 10px rgba(255,215,0,0.8)',
-          boxShadow: '0 0 60px rgba(255,215,0,0.8), 0 0 120px rgba(255,69,0,0.5)',
+          textShadow: '0 0 25px rgba(0,0,0,0.6), 0 0 15px rgba(255,215,0,0.9)',
+          boxShadow: '0 0 80px rgba(255,215,0,0.9), 0 0 150px rgba(255,69,0,0.6)',
           zIndex: 20,
           animation: 'mvpGlow 1.5s ease-in-out infinite, mvpEntrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
-          backdropFilter: 'blur(10px)',
+          backdropFilter: 'blur(12px)',
           whiteSpace: 'nowrap',
           pointerEvents: 'none',
-          border: '3px solid gold',
-          letterSpacing: '2px',
+          border: '4px solid gold',
+          letterSpacing: '3px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <span style={{ fontSize: '48px', animation: 'crownFloat 2s ease-in-out infinite' }}>👑</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            <span style={{ fontSize: '56px', animation: 'crownFloat 2s ease-in-out infinite' }}>👑</span>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '20px', marginBottom: '8px', opacity: 0.9 }}>🏆 MOST VALUABLE PLAYER 🏆</div>
-              <div style={{ fontSize: '48px', fontWeight: '900' }}>{currentMVP.nickname}</div>
-              <div style={{ fontSize: '24px', marginTop: '8px', color: '#FFD700' }}>{currentMVP.score.toLocaleString()} POINTS</div>
+              <div style={{ fontSize: '22px', marginBottom: '10px', opacity: 0.95 }}>🏆 MOST VALUABLE PLAYER 🏆</div>
+              <div style={{ fontSize: '56px', fontWeight: '900' }}>{currentMVP.nickname}</div>
+              <div style={{ fontSize: '28px', marginTop: '12px', color: '#FFD700' }}>{currentMVP.score.toLocaleString()} POINTS</div>
             </div>
-            <span style={{ fontSize: '48px', animation: 'crownFloat 2s ease-in-out infinite reverse' }}>👑</span>
+            <span style={{ fontSize: '56px', animation: 'crownFloat 2s ease-in-out infinite reverse' }}>👑</span>
           </div>
         </div>
       )}
@@ -650,33 +649,141 @@ export default function UserPage() {
           position: 'fixed',
           bottom: '20px',
           left: '20px',
-          background: 'rgba(0,0,0,0.7)',
-          padding: '8px 16px',
-          borderRadius: '20px',
+          background: 'rgba(0,0,0,0.75)',
+          padding: '10px 20px',
+          borderRadius: '25px',
           color: '#FFD700',
-          fontSize: '14px',
+          fontSize: '16px',
           fontWeight: 'bold',
           fontFamily: 'monospace',
           zIndex: 20,
-          backdropFilter: 'blur(5px)',
+          backdropFilter: 'blur(8px)',
           border: '1px solid #FFD700',
-          animation: 'pulse 1s ease-in-out infinite',
-          boxShadow: '0 0 15px rgba(255,215,0,0.5)',
+          animation: 'pulseBattle 1s ease-in-out infinite',
+          boxShadow: '0 0 20px rgba(255,215,0,0.6)',
         }}>
           ⚔️ BATTLE ACTIVE ⚔️
         </div>
+      )}
+
+      {/* AMAZING GIFT ANIMATION - Enhanced with multi-layer effects */}
+      {currentGifter && (
+        <>
+          {/* Glow ring behind text */}
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: `${fontSize * 3}px`,
+            height: `${fontSize * 1.5}px`,
+            background: 'radial-gradient(circle, rgba(0,255,255,0.4), rgba(147,112,219,0.2), transparent)',
+            borderRadius: '50%',
+            filter: 'blur(30px)',
+            animation: 'glowPulse 1s ease-in-out infinite',
+            pointerEvents: 'none',
+            zIndex: 8,
+          }} />
+          
+          {/* Floating particles around text */}
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                width: '8px',
+                height: '8px',
+                background: `hsl(${200 + i * 20}, 100%, 60%)`,
+                borderRadius: '50%',
+                boxShadow: '0 0 15px currentColor',
+                animation: `particleOrbit ${1.5 + i * 0.1}s ease-out forwards`,
+                animationDelay: `${i * 0.05}s`,
+                pointerEvents: 'none',
+                zIndex: 9,
+              }}
+            />
+          ))}
+          
+          {/* Name text */}
+          <div style={{
+            paddingLeft: '8vw',
+            paddingRight: '8vw',
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            zIndex: 10,
+            filter: showEffects ? 'brightness(1.4) contrast(1.2)' : 'none',
+            transition: 'filter 0.3s ease',
+          }}>
+            <div
+              ref={textRef}
+              style={{
+                fontSize: `${fontSize}px`,
+                fontWeight: '900',
+                fontFamily: 'Arial Black, Impact, sans-serif',
+                background: 'linear-gradient(135deg, #00FFFF, #4169E1, #9370DB, #8A2BE2, #4B0082, #FF00FF)',
+                backgroundSize: '400% 400%',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                filter: 'drop-shadow(0 0 50px rgba(0,255,255,0.9)) drop-shadow(0 0 100px rgba(147,112,219,0.7)) drop-shadow(0 0 150px rgba(255,0,255,0.5))',
+                animation: animationState === 'entering' 
+                  ? 'giftEnterEpic 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards, gradientShift 2s ease infinite' 
+                  : animationState === 'exiting'
+                  ? 'giftExitEpic 1s ease-out forwards'
+                  : 'gradientShift 2s ease infinite',
+                textShadow: showEffects ? '0 0 80px cyan, 0 0 150px blueviolet' : 'none',
+                letterSpacing: '4px',
+              }}
+            >
+              {currentGifter}
+            </div>
+          </div>
+          
+          {/* Gift name subtitle */}
+          {currentGiftName && (
+            <div style={{
+              position: 'fixed',
+              bottom: '30%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'linear-gradient(135deg, rgba(0,0,0,0.7), rgba(100,0,100,0.7))',
+              backdropFilter: 'blur(10px)',
+              padding: '8px 24px',
+              borderRadius: '40px',
+              border: '1px solid cyan',
+              animation: 'giftNameSlide 0.6s ease-out forwards',
+              pointerEvents: 'none',
+              zIndex: 11,
+              whiteSpace: 'nowrap',
+            }}>
+              <span style={{
+                color: '#FFD700',
+                fontWeight: 'bold',
+                fontSize: '20px',
+                fontFamily: 'Arial Black, sans-serif',
+              }}>
+                🎁 {currentGiftName} 🎁
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {/* GIFT IMAGE OVERLAY */}
       {currentGiftImage && currentGifter && (
         <div style={{
           position: 'fixed',
-          top: '30%',
-          right: '20px',
-          width: '80px',
-          height: '80px',
+          top: '35%',
+          right: '30px',
+          width: '100px',
+          height: '100px',
           zIndex: 15,
-          animation: 'giftImageFloat 1.5s ease-out forwards',
+          animation: 'giftImageEpic 1.2s cubic-bezier(0.2, 0.8, 0.4, 1.2) forwards',
           pointerEvents: 'none',
         }}>
           <img 
@@ -686,7 +793,8 @@ export default function UserPage() {
               width: '100%',
               height: '100%',
               objectFit: 'contain',
-              filter: 'drop-shadow(0 0 20px cyan)',
+              filter: 'drop-shadow(0 0 30px cyan) drop-shadow(0 0 15px magenta)',
+              animation: 'giftImageSpin 1s ease-in-out',
             }}
           />
         </div>
@@ -703,7 +811,6 @@ export default function UserPage() {
           pointerEvents: 'none',
           zIndex: 5,
         }}>
-          {/* Lightning */}
           {[...Array(3)].map((_, i) => (
             <div
               key={`bolt-${i}`}
@@ -711,19 +818,18 @@ export default function UserPage() {
                 position: 'absolute',
                 top: '0%',
                 left: `${20 + i * 30}%`,
-                width: '4px',
+                width: '6px',
                 height: '100%',
-                background: 'linear-gradient(180deg, transparent, #00FFFF, #4169E1, #4B0082, transparent)',
-                filter: 'blur(3px)',
-                animation: `lightningFlash 0.3s ease-out ${i * 0.1}s`,
+                background: 'linear-gradient(180deg, transparent, #00FFFF, #4169E1, #FF00FF, transparent)',
+                filter: 'blur(4px)',
+                animation: `lightningFlashEpic 0.4s ease-out ${i * 0.1}s`,
                 opacity: 0,
-                boxShadow: '0 0 30px #00FFFF',
+                boxShadow: '0 0 40px cyan',
               }}
             />
           ))}
 
-          {/* Explosion Rings */}
-          {[...Array(5)].map((_, i) => (
+          {[...Array(6)].map((_, i) => (
             <div
               key={`ring-${i}`}
               style={{
@@ -731,20 +837,19 @@ export default function UserPage() {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                width: `${100 + i * 50}px`,
-                height: `${100 + i * 50}px`,
-                border: `3px solid ${i % 2 === 0 ? '#00FFFF' : '#9370DB'}`,
+                width: `${100 + i * 60}px`,
+                height: `${100 + i * 60}px`,
+                border: `4px solid ${i % 2 === 0 ? '#00FFFF' : '#FF00FF'}`,
                 borderRadius: '50%',
-                animation: `explosionRing ${1 + i * 0.2}s ease-out forwards`,
+                animation: `explosionRingEpic ${1 + i * 0.15}s ease-out forwards`,
                 opacity: 0,
-                boxShadow: `0 0 ${30 + i * 20}px ${i % 2 === 0 ? '#00FFFF' : '#9370DB'}`,
+                boxShadow: `0 0 ${40 + i * 25}px ${i % 2 === 0 ? 'cyan' : 'magenta'}`,
               }}
             />
           ))}
 
-          {/* Sparkles */}
-          {[...Array(40)].map((_, i) => {
-            const colors = ['#00FFFF', '#4169E1', '#9370DB', '#8A2BE2', '#4B0082'];
+          {[...Array(60)].map((_, i) => {
+            const colors = ['#00FFFF', '#4169E1', '#9370DB', '#FF00FF', '#FF1493', '#4B0082'];
             return (
               <div
                 key={`sparkle-${i}`}
@@ -752,13 +857,13 @@ export default function UserPage() {
                   position: 'absolute',
                   left: `${Math.random() * 100}%`,
                   top: '-10%',
-                  width: `${Math.random() * 8 + 3}px`,
-                  height: `${Math.random() * 8 + 3}px`,
+                  width: `${Math.random() * 10 + 4}px`,
+                  height: `${Math.random() * 10 + 4}px`,
                   background: colors[Math.floor(Math.random() * colors.length)],
                   borderRadius: '50%',
-                  boxShadow: `0 0 ${Math.random() * 30 + 15}px currentColor`,
-                  animation: `sparkleFall ${1.5 + Math.random()}s linear forwards`,
-                  animationDelay: `${Math.random() * 0.8}s`,
+                  boxShadow: `0 0 ${Math.random() * 40 + 20}px currentColor`,
+                  animation: `sparkleFallEpic ${1.8 + Math.random()}s linear forwards`,
+                  animationDelay: `${Math.random() * 0.6}s`,
                 }}
               />
             );
@@ -766,62 +871,20 @@ export default function UserPage() {
         </div>
       )}
 
-      {/* Name */}
-      {currentGifter && (
-        <div style={{
-          paddingLeft: '8vw',
-          paddingRight: '8vw',
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          zIndex: 10,
-          filter: showEffects ? 'brightness(1.3) contrast(1.2)' : 'none',
-          transition: 'filter 0.3s ease',
-        }}>
-          <div
-            ref={textRef}
-            style={{
-              fontSize: `${fontSize}px`,
-              fontWeight: '900',
-              fontFamily: 'Arial Black, Impact, sans-serif',
-              background: 'linear-gradient(135deg, #00FFFF, #4169E1, #9370DB, #8A2BE2, #4B0082)',
-              backgroundSize: '400% 400%',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              textTransform: 'uppercase',
-              whiteSpace: 'nowrap',
-              filter: 'drop-shadow(0 0 40px rgba(0,255,255,0.8)) drop-shadow(0 0 80px rgba(147,112,219,0.6)) drop-shadow(0 0 120px rgba(75,0,130,0.4))',
-              animation: animationState === 'entering' 
-                ? 'coolEnter 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.5) forwards' 
-                : animationState === 'exiting'
-                ? 'coolExit 1s ease-out forwards'
-                : 'none',
-              textShadow: showEffects ? '0 0 60px cyan, 0 0 120px blueviolet' : 'none',
-            }}
-          >
-            {currentGifter}
-          </div>
-        </div>
-      )}
-
       <style>{`
-        @keyframes coolEnter {
+        @keyframes giftEnterEpic {
           0% {
             opacity: 0;
-            transform: scale(0.1) rotate(-20deg) translateY(100px);
-            filter: blur(40px) brightness(0.5);
+            transform: scale(0.05) rotate(-45deg) translateY(200px);
+            filter: blur(60px) brightness(0);
           }
-          30% {
+          40% {
             opacity: 1;
-            transform: scale(1.3) rotate(5deg) translateY(-20px);
-            filter: blur(0) brightness(1.3);
-          }
-          50% {
-            transform: scale(0.95) rotate(-3deg) translateY(5px);
+            transform: scale(1.2) rotate(10deg) translateY(-30px);
+            filter: blur(0) brightness(1.4);
           }
           70% {
-            transform: scale(1.05) rotate(2deg) translateY(-2px);
+            transform: scale(0.95) rotate(-2deg) translateY(10px);
           }
           100% {
             opacity: 1;
@@ -830,68 +893,150 @@ export default function UserPage() {
           }
         }
 
-        @keyframes coolExit {
+        @keyframes giftExitEpic {
           0% {
             opacity: 1;
             transform: scale(1);
             filter: blur(0) brightness(1.2);
           }
-          30% {
+          50% {
             opacity: 0.8;
-            transform: scale(1.8);
-            filter: blur(3px) brightness(1.5) hue-rotate(30deg);
-          }
-          60% {
-            opacity: 0.4;
-            transform: scale(3);
-            filter: blur(8px) brightness(2) hue-rotate(60deg);
+            transform: scale(1.5) rotate(15deg);
+            filter: blur(5px) brightness(1.6) hue-rotate(60deg);
           }
           100% {
             opacity: 0;
-            transform: scale(5);
-            filter: blur(20px) brightness(3) hue-rotate(90deg);
+            transform: scale(2.5) rotate(45deg);
+            filter: blur(25px) brightness(2.5) hue-rotate(120deg);
           }
         }
 
-        @keyframes likeFloatEase {
+        @keyframes gradientShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        @keyframes giftImageEpic {
           0% {
             opacity: 0;
-            transform: translateY(0) scale(0.3);
+            transform: translateX(100px) scale(0.2) rotate(-90deg);
+          }
+          30% {
+            opacity: 1;
+            transform: translateX(0) scale(1.2) rotate(10deg);
+          }
+          70% {
+            transform: translateX(0) scale(1) rotate(0deg);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+
+        @keyframes giftImageSpin {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.2); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes giftNameSlide {
+          0% {
+            opacity: 0;
+            transform: translateX(-50%) translateY(50px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        @keyframes particleOrbit {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -50%) translate(0, 0) scale(0);
           }
           20% {
             opacity: 1;
-            transform: translateY(-30px) scale(1);
-          }
-          60% {
-            opacity: 1;
-            transform: translateY(-80px) scale(0.95);
+            transform: translate(-50%, -50%) translate(${Math.random() * 200 - 100}px, ${Math.random() * 100 - 50}px) scale(1);
           }
           100% {
             opacity: 0;
-            transform: translateY(-120px) scale(0.8);
+            transform: translate(-50%, -50%) translate(${Math.random() * 300 - 150}px, ${Math.random() * 200 - 100}px) scale(0);
           }
         }
 
-        @keyframes heartBeat {
+        @keyframes likeFloatScale {
           0% {
-            transform: scale(1);
+            opacity: 0;
+            transform: translateY(0) scale(0.2);
+          }
+          15% {
+            opacity: 1;
+            transform: translateY(-20px) scale(1);
           }
           50% {
-            transform: scale(1.3);
+            opacity: 0.8;
+            transform: translateY(-60px) scale(1.1);
           }
           100% {
-            transform: scale(1);
+            opacity: 0;
+            transform: translateY(-100px) scale(1.2);
+          }
+        }
+
+        @keyframes heartBeatScale {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.4); }
+          100% { transform: scale(1); }
+        }
+
+        @keyframes lightningFlashEpic {
+          0% { opacity: 0; transform: scaleY(0); }
+          15% { opacity: 1; transform: scaleY(1); }
+          85% { opacity: 0.8; transform: scaleY(1); }
+          100% { opacity: 0; transform: scaleY(0); }
+        }
+
+        @keyframes explosionRingEpic {
+          0% {
+            opacity: 0.9;
+            transform: translate(-50%, -50%) scale(0.1);
+            border-width: 8px;
+          }
+          100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(5);
+            border-width: 1px;
+          }
+        }
+
+        @keyframes sparkleFallEpic {
+          0% {
+            transform: translateY(-10vh) rotate(0deg);
+            opacity: 0;
+          }
+          15% {
+            opacity: 1;
+          }
+          85% {
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateY(110vh) rotate(720deg);
+            opacity: 0;
           }
         }
 
         @keyframes mvpEntrance {
           0% {
             opacity: 0;
-            transform: translate(-50%, -50%) scale(0.2) rotate(-180deg);
+            transform: translate(-50%, -50%) scale(0.1) rotate(-360deg);
           }
-          50% {
+          40% {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1.1) rotate(5deg);
+            transform: translate(-50%, -50%) scale(1.2) rotate(10deg);
           }
           100% {
             opacity: 1;
@@ -901,31 +1046,32 @@ export default function UserPage() {
 
         @keyframes mvpGlow {
           0%, 100% {
-            box-shadow: 0 0 60px rgba(255,215,0,0.8), 0 0 120px rgba(255,69,0,0.5);
+            box-shadow: 0 0 80px rgba(255,215,0,0.9), 0 0 150px rgba(255,69,0,0.7);
             background-position: 0% 50%;
           }
           50% {
-            box-shadow: 0 0 100px rgba(255,215,0,1), 0 0 180px rgba(255,69,0,0.8);
+            box-shadow: 0 0 120px rgba(255,215,0,1.2), 0 0 200px rgba(255,69,0,1);
             background-position: 100% 50%;
           }
         }
 
         @keyframes crownFloat {
-          0%, 100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-10px);
-          }
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-12px) rotate(5deg); }
+        }
+
+        @keyframes crownSpin {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(15deg); }
         }
 
         @keyframes leaderboardGlow {
           0%, 100% {
-            box-shadow: 0 0 40px rgba(255,215,0,0.5), 0 0 20px rgba(255,0,255,0.3);
+            box-shadow: 0 0 50px rgba(255,215,0,0.6), 0 0 25px rgba(255,0,255,0.4);
             border-color: gold;
           }
           50% {
-            box-shadow: 0 0 60px rgba(255,215,0,0.8), 0 0 30px rgba(255,0,255,0.5);
+            box-shadow: 0 0 80px rgba(255,215,0,1), 0 0 40px rgba(255,0,255,0.7);
             border-color: #ffd700;
           }
         }
@@ -933,73 +1079,22 @@ export default function UserPage() {
         @keyframes slideInLeft {
           from {
             opacity: 0;
-            transform: translateX(-100px);
+            transform: translateX(-150px) translateY(50%);
           }
           to {
             opacity: 1;
-            transform: translateX(0);
+            transform: translateX(0) translateY(50%);
           }
         }
 
-        @keyframes lightningFlash {
-          0% { opacity: 0; transform: scaleY(0); }
-          20% { opacity: 1; transform: scaleY(1); }
-          80% { opacity: 0.8; transform: scaleY(1); }
-          100% { opacity: 0; transform: scaleY(0); }
+        @keyframes glowPulse {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.1); }
         }
 
-        @keyframes explosionRing {
-          0% {
-            opacity: 0.8;
-            transform: translate(-50%, -50%) scale(0.2);
-            border-width: 5px;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(4);
-            border-width: 1px;
-          }
-        }
-
-        @keyframes sparkleFall {
-          0% {
-            transform: translateY(-10vh) rotate(0deg);
-            opacity: 0;
-          }
-          20% {
-            opacity: 1;
-          }
-          80% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(110vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 0.7; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 8px gold; }
-        }
-
-        @keyframes giftImageFloat {
-          0% {
-            opacity: 0;
-            transform: translateX(50px) scale(0.5);
-          }
-          20% {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-          80% {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: translateX(-50px) scale(0.5);
-          }
+        @keyframes pulseBattle {
+          0%, 100% { opacity: 0.8; transform: scale(1); text-shadow: 0 0 5px gold; }
+          50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 15px gold; }
         }
 
         body {
