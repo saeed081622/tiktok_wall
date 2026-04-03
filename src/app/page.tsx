@@ -1,116 +1,153 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { connectToSocket, disconnectSocket } from './lib/socket';
+import { useEffect, useState } from 'react';
+import io from 'socket.io-client';
 
+export default function TestPage() {
+  const [connected, setConnected] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [username, setUsername] = useState('');
+  const [status, setStatus] = useState('');
 
-
-// =============================================
-// TIKTOK USERNAME - CHANGE THIS
-// =============================================
-const TIKTOK_USERNAME = 'amir_mansory';//'darnz_45'; or valery.fain14  // <-- CHANGE THIS
-// =============================================
-
-interface TikTokEvent {
-  type: 'gift';
-  username: string;
-  nickname: string;
-  timestamp: number;
-}
-
-export default function Home() {
-  const [currentGifter, setCurrentGifter] = useState<string | null>(null);
+  const addLog = (msg: string) => {
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
+  };
 
   useEffect(() => {
-    const socket = connectToSocket();
+    addLog('🔌 Connecting to socket...');
+    
+    const socket = io({
+      path: '/api/socket',
+      transports: ['websocket', 'polling']
+    });
 
-    const handleConnect = () => {
-      socket.emit('connect-tiktok', TIKTOK_USERNAME);
-    };
+    socket.on('connect', () => {
+      setConnected(true);
+      addLog('✅ Socket connected! ID: ' + socket.id);
+    });
 
-    const handleTikTokEvent = (event: any) => {
-      if (event.type === 'gift') {
-        setCurrentGifter(event.nickname);
-        
-        // Clear after 5 seconds
-        setTimeout(() => {
-          setCurrentGifter(null);
-        }, 5000);
+    socket.on('connect_error', (err) => {
+      setConnected(false);
+      addLog('❌ Connection error: ' + err.message);
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
+      addLog('⚠️ Socket disconnected');
+    });
+
+    socket.on('connection-result', (result) => {
+      if (result.success) {
+        addLog(`✅ TikTok connected! Room: ${result.roomId}`);
+        setStatus(`Connected to @${username}`);
+      } else {
+        addLog(`❌ TikTok connection failed: ${result.error}`);
+        setStatus(`Failed: ${result.error}`);
       }
-    };
+    });
 
-    socket.on('connect', handleConnect);
-    socket.on('tiktok-event', handleTikTokEvent);
+    socket.on('tiktok-event', (ev) => {
+      if (ev.type === 'gift') {
+        addLog(`🎁 GIFT: ${ev.nickname} sent ${ev.repeatCount}x ${ev.giftName} (${ev.totalDiamonds}💎) for @${ev.streamer}`);
+      } else if (ev.type === 'like') {
+        addLog(`❤️ LIKE: ${ev.nickname} sent ${ev.count} likes for @${ev.streamer}`);
+      } else if (ev.type === 'follow') {
+        addLog(`➕ FOLLOW: ${ev.nickname} followed @${ev.streamer}`);
+      } else if (ev.type === 'join') {
+        addLog(`👤 JOIN: ${ev.nickname} joined @${ev.streamer}`);
+      } else if (ev.type === 'chat') {
+        addLog(`💬 CHAT: ${ev.nickname}: ${ev.comment}`);
+      } else {
+        addLog(`📡 EVENT: ${ev.type}`);
+      }
+    });
+
+    // Test control events
+    socket.on('test-ping', () => addLog('🏓 Received PING!'));
+    socket.on('2x-points', () => addLog('🔥 2X POINTS ACTIVATED!'));
+    socket.on('glove-powerup', () => addLog('🧤 GLOVE POWER-UP!'));
+
+    (window as any).testSocket = socket;
+    addLog('💡 Type window.testSocket.emit("control-event", "test-ping", {}) to test');
 
     return () => {
-      socket.off('connect', handleConnect);
-      socket.off('tiktok-event', handleTikTokEvent);
-      disconnectSocket();
+      socket.disconnect();
     };
   }, []);
 
-  return (
-    <div style={{ 
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'transparent',  // Changed to transparent for overlay
-      margin: 0,
-      padding: 0,
-      pointerEvents: 'none'  // So clicks pass through to your stream
-    }}>
-      {currentGifter ? (
-        <div style={{
-          fontSize: '72px',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          background: 'linear-gradient(45deg, #FFD700, #FF69B4, #00FFFF, #FFD700)',
-          backgroundSize: '300% 300%',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.5))',
-          fontFamily: 'Arial, sans-serif',
-          whiteSpace: 'nowrap',
-          animation: 'fadeInOut 5s ease-in-out forwards, gradientShift 3s ease infinite'
-        }}>
-          {currentGifter}
-        </div>
-      ) : (
-        <div style={{
-          fontSize: '24px',
-          color: 'rgba(255,255,255,0.3)',
-          textAlign: 'center',
-          fontFamily: 'Arial, sans-serif',
-        }}>
-          🎁
-        </div>
-      )}
+  const connectTikTok = () => {
+    if (!username.trim()) {
+      alert('Enter a TikTok username');
+      return;
+    }
+    addLog(`📡 Connecting to TikTok: @${username}`);
+    (window as any).testSocket?.emit('connect-tiktok', username);
+  };
 
-      <style>{`
-        @keyframes fadeInOut {
-          0% { opacity: 0; transform: scale(0.5); }
-          10% { opacity: 1; transform: scale(1); }
-          90% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(0.5); }
-        }
-        @keyframes gradientShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        body {
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          background: transparent;
-        }
-      `}</style>
+  const sendTestCommand = () => {
+    addLog(`📤 Sending test-ping command`);
+    (window as any).testSocket?.emit('control-event', 'test-ping', { time: Date.now() });
+  };
+
+  return (
+    <div className="min-h-screen bg-black p-6">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold text-white mb-4">🧪 Socket Test</h1>
+        
+        {/* Status */}
+        <div className={`p-3 rounded-lg mb-4 ${connected ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+          {connected ? '🟢 Connected to Socket' : '🔴 Disconnected'}
+        </div>
+        
+        {/* TikTok Connection */}
+        <div className="bg-gray-900 rounded-lg p-4 mb-4">
+          <h2 className="text-white font-semibold mb-2">📱 TikTok Connection</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="TikTok username (e.g., 'scump')"
+              className="flex-1 px-3 py-2 bg-gray-800 text-white rounded border border-gray-700"
+              onKeyPress={(e) => e.key === 'Enter' && connectTikTok()}
+            />
+            <button
+              onClick={connectTikTok}
+              disabled={!connected}
+              className="px-4 py-2 bg-purple-600 rounded hover:bg-purple-500 disabled:opacity-50"
+            >
+              Connect
+            </button>
+          </div>
+          {status && <div className="text-sm text-gray-400 mt-2">{status}</div>}
+        </div>
+        
+        {/* Test Commands */}
+        <div className="bg-gray-900 rounded-lg p-4 mb-4">
+          <h2 className="text-white font-semibold mb-2">🎮 Test Commands</h2>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={sendTestCommand} className="px-3 py-1 bg-blue-600 rounded hover:bg-blue-500 text-sm">
+              Send Test Ping
+            </button>
+            <button onClick={() => (window as any).testSocket?.emit('control-event', '2x-points', {})} className="px-3 py-1 bg-pink-600 rounded hover:bg-pink-500 text-sm">
+              Test 2X
+            </button>
+            <button onClick={() => (window as any).testSocket?.emit('control-event', 'glove-powerup', {})} className="px-3 py-1 bg-cyan-600 rounded hover:bg-cyan-500 text-sm">
+              Test Glove
+            </button>
+          </div>
+        </div>
+        
+        {/* Logs */}
+        <div className="bg-gray-900 rounded-lg p-4">
+          <h2 className="text-white font-semibold mb-2">📋 Event Log</h2>
+          <div className="h-96 overflow-y-auto font-mono text-xs">
+            {logs.map((log, i) => (
+              <div key={i} className="text-gray-300 border-b border-gray-800 py-1">{log}</div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

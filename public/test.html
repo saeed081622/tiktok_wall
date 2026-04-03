@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket Test</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Socket Test</h1>
+    <div id="status">Connecting...</div>
+    <button onclick="sendTest()">Send Test Event</button>
+    <button onclick="send2x()">Send 2X</button>
+    <div id="log"></div>
+
+    <script>
+        const socket = io({
+            path: '/api/socket',
+            transports: ['websocket', 'polling']
+        });
+        
+        const logDiv = document.getElementById('log');
+        
+        function addLog(msg) {
+            logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        }
+        
+        socket.on('connect', () => {
+            addLog('✅ Connected to socket!');
+            document.getElementById('status').innerHTML = 'Connected!';
+            document.getElementById('status').style.color = 'green';
+        });
+        
+        socket.on('connect_error', (err) => {
+            addLog('❌ Connection error: ' + err.message);
+            document.getElementById('status').innerHTML = 'Connection failed';
+            document.getElementById('status').style.color = 'red';
+        });
+        
+        socket.onAny((event, data) => {
+            addLog(`📥 Received: ${event} = ${JSON.stringify(data)}`);
+        });
+        
+        function sendTest() {
+            addLog('📤 Sending: test-event');
+            socket.emit('control-event', 'test-event', { time: Date.now() });
+        }
+        
+        function send2x() {
+            addLog('📤 Sending: 2x-points');
+            socket.emit('control-event', '2x-points', { time: Date.now() });
+        }
+    </script>
+</body>
+</html>

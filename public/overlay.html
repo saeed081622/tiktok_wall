@@ -1,0 +1,1222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>TikTok Overlay | Rainbow Gifter Names + Queue System | Urdu/RTL Support</title>
+
+    <!-- Socket.IO client -->
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik+Vinyl&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      #container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        background: transparent;
+      }
+
+      .likes-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 25;
+        overflow: visible;
+      }
+
+      .like-item {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        bottom: 0;
+        animation: likeFloatUp 2.8s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+      }
+      .like-item.float-up {
+        animation: likeFloatUp 0.5s ease-out forwards;
+      }
+
+      .bubble-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        animation: likeFloatUp 3.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      .bubble-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          rgba(255, 255, 255, 0.85) 0%,
+          rgba(255, 255, 255, 0.35) 20%,
+          rgba(255, 255, 255, 0.15) 40%,
+          rgba(255, 255, 255, 0.08) 60%,
+          rgba(255, 255, 255, 0.15) 100%
+        );
+        border: 1.5px solid rgba(255, 255, 255, 1);
+        box-shadow:
+          0 0 14px rgba(255, 255, 255, 0.6),
+          inset 0 2px 6px rgba(255, 255, 255, 0.9),
+          inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(2px);
+      }
+      .bubble-ring::before {
+        content: "";
+        position: absolute;
+        top: 10%;
+        left: 18%;
+        width: 30%;
+        height: 30%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 1) 0%,
+          rgba(255, 255, 255, 0.6) 40%,
+          rgba(255, 255, 255, 0) 80%
+        );
+        filter: blur(1px);
+      }
+      .bubble-ring::after {
+        content: "";
+        position: absolute;
+        bottom: 18%;
+        right: 18%;
+        width: 16%;
+        height: 16%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.8) 0%,
+          rgba(255, 255, 255, 0) 70%
+        );
+      }
+      .like-icon {
+        font-size: 2.2em;
+        position: relative;
+        z-index: 2;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+      }
+
+      @keyframes likeFloatUp {
+        0% {
+          opacity: 0;
+          transform: translateY(0) scale(0.75);
+        }
+        15% {
+          opacity: 1;
+          transform: translateY(-10px) scale(1.02);
+        }
+        40% {
+          transform: translateY(-45px) scale(1);
+        }
+        70% {
+          opacity: 0.9;
+          transform: translateY(-90px) scale(0.97);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-150px) scale(0.9);
+        }
+      }
+
+      .burst-particle {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 26;
+        will-change: transform, opacity;
+        animation: particleExplode 0.7s cubic-bezier(0.2, 0.9, 0.4, 1) forwards;
+      }
+
+      @keyframes particleExplode {
+        0% {
+          opacity: 1;
+          transform: scale(0.2) translate(0, 0);
+        }
+        30% {
+          opacity: 0.9;
+          transform: scale(1.2) translate(var(--tx), var(--ty));
+        }
+        70% {
+          opacity: 0.6;
+          transform: scale(0.8)
+            translate(calc(var(--tx) * 1.3), calc(var(--ty) * 1.3));
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0)
+            translate(calc(var(--tx) * 1.8), calc(var(--ty) * 1.8));
+        }
+      }
+
+      .burst-spark {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: radial-gradient(circle, #fff, gold);
+        border-radius: 50%;
+        pointer-events: none;
+        animation: sparkFly 0.6s ease-out forwards;
+      }
+
+      @keyframes sparkFly {
+        0% {
+          opacity: 1;
+          transform: scale(0.5) translate(0, 0);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0) translate(var(--sx), var(--sy));
+        }
+      }
+
+      .every-gift-container {
+        position: fixed;
+        bottom: 8%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 30;
+        text-align: center;
+        pointer-events: none;
+        background: transparent;
+        display: none;
+        transition: opacity 1s ease-out;
+        width: auto;
+        min-width: 320px;
+        max-width: 85vw;
+      }
+      .gift-banner {
+        font-family:
+          "Poppins", "Noto Naskh Arabic", "Noto Sans JP", "Noto Sans KR",
+          "Noto Sans SC", sans-serif;
+        font-weight: 300;
+        font-size: 2.5vw;
+        letter-spacing: 2px;
+        color: #ffffff;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: nowrap;
+        width: 100%;
+      }
+      .gift-name-badge {
+        font-weight: 700;
+        color: #ffffff;
+        background: transparent;
+        padding: 0 25px;
+        border-radius: 40px;
+        border: 2px solid #ffffff;
+        letter-spacing: 3px;
+        margin: 0 5px;
+        font-size: 1.5em;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      .worth-badge {
+        font-weight: 700;
+        color: #ffffff;
+        background: transparent;
+        padding: 0 20px;
+        border-radius: 40px;
+        border: 2px solid #ffffff;
+        letter-spacing: 2px;
+        margin: 0 5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 1.5em;
+        white-space: nowrap;
+      }
+      .diamond-icon {
+        font-size: 1em;
+        margin-right: 2px;
+      }
+
+      .gifter-name-display {
+        position: fixed;
+        bottom: 18%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 30;
+        text-align: center;
+        pointer-events: none;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 1s ease-out;
+        width: 80%;
+        max-width: 80%;
+      }
+      .name-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        flex-wrap: wrap;
+        white-space: nowrap;
+        overflow-x: auto;
+        overflow-y: visible;
+        direction: ltr;
+      }
+      .letter-wrapper {
+        display: inline-block;
+        flex-shrink: 0;
+      }
+      .letter-wrapper.space-wrapper {
+        width: 0.5em;
+        flex-shrink: 0;
+      }
+      .letter {
+        display: inline-block;
+        font-weight: 600;
+        font-family:
+          "Rubik Vinyl", "Noto Naskh Arabic", "Segoe UI Emoji",
+          "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+        text-transform: uppercase;
+        position: relative;
+        z-index: 35;
+        line-height: 1.2;
+        opacity: 0;
+        animation: bounceLetter 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        white-space: nowrap;
+        unicode-bidi: isolate;
+      }
+      .letter.space {
+        opacity: 0;
+      }
+      .letter.emoji {
+        font-family:
+          "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji",
+          "Twemoji Mozilla", sans-serif;
+      }
+      .letter.rtl-script {
+        font-family: "Noto Naskh Arabic", "Segoe UI Emoji", sans-serif;
+        font-weight: 600;
+        text-transform: none;
+      }
+
+      .top-gifters-container {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 35;
+        pointer-events: none;
+        display: none;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .gifter-entry {
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: transparent;
+        border-radius: 50px;
+        border: 2px solid rgba(255, 255, 255, 0.85);
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        white-space: nowrap;
+        width: auto;
+        min-width: 170px;
+        max-width: 85vw;
+        padding: 6px 20px 6px 44px;
+      }
+
+      .rank-badge {
+        position: absolute;
+        left: -10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 38px;
+        height: 38px;
+        background: radial-gradient(circle, #ffd700, #ff8c00);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Rubik Vinyl", system-ui;
+        font-size: 22px;
+        font-weight: bold;
+        color: #000;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+        border: 2px solid rgba(255, 255, 255, 0.9);
+      }
+
+      .rank-1 {
+        background: radial-gradient(circle, #ffd700, #ffa500);
+      }
+      .rank-2 {
+        background: radial-gradient(circle, #e0e0e0, #a0a0a0);
+      }
+      .rank-3 {
+        background: radial-gradient(circle, #d4af37, #b87333);
+      }
+
+      .gifter-name-letters {
+        display: flex;
+        gap: 4px;
+        white-space: nowrap;
+        align-items: baseline;
+        direction: ltr;
+      }
+
+      .gifter-letter {
+        display: inline-block;
+        font-family:
+          "Noto Naskh Arabic", "Segoe UI Emoji", "Apple Color Emoji",
+          "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+        text-transform: uppercase;
+        opacity: 0;
+        animation: bounceLetter 0.4s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+        line-height: 1;
+        font-size: 24px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        unicode-bidi: isolate;
+      }
+
+      .gifter-letter.emoji {
+        font-family:
+          "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji",
+          "Twemoji Mozilla", sans-serif;
+      }
+
+      @media (max-width: 768px) {
+        .gifter-entry {
+          padding: 5px 16px 5px 38px;
+          min-width: 140px;
+        }
+        .rank-badge {
+          width: 32px;
+          height: 32px;
+          font-size: 18px;
+          left: -8px;
+        }
+        .gift-banner {
+          font-size: 4vw;
+        }
+        .gifter-name-display {
+          bottom: 16%;
+          width: 85%;
+        }
+        .every-gift-container {
+          bottom: 6%;
+        }
+        .gifter-letter {
+          font-size: 18px;
+        }
+        .letter {
+          font-size: clamp(28px, 8vw, 72px);
+        }
+      }
+
+      @keyframes bounceLetter {
+        0% {
+          opacity: 0;
+          transform: translateY(40px) scale(0.7);
+          filter: blur(6px);
+        }
+        30% {
+          opacity: 1;
+          transform: translateY(-10px) scale(1.05);
+          filter: blur(0);
+        }
+        50% {
+          transform: translateY(3px) scale(1.01);
+        }
+        70% {
+          transform: translateY(-2px) scale(1);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      #status {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: red;
+        z-index: 10000;
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+      }
+
+      /* Message Banner Styles */
+      .message-banner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        font-family: 'Poppins', sans-serif;
+        font-size: 4rem;
+        font-weight: bold;
+        color: white;
+        text-shadow: 0 0 20px rgba(0,0,0,0.5);
+        white-space: nowrap;
+        pointer-events: none;
+        animation: messagePop 0.5s ease-out forwards;
+      }
+
+      @keyframes messagePop {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.5);
+        }
+        50% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1.2);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(1);
+          visibility: hidden;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="likesContainer" class="likes-container"></div>
+      <div id="giftBannerContainer" class="every-gift-container">
+        <div class="gift-banner" id="giftBanner">
+          <span class="gift-name-badge" id="giftNameBadge"></span>
+          <span class="worth-badge" id="worthBadge">
+            <span id="diamondAmount">0</span>
+            <span class="diamond-icon">💎</span>
+          </span>
+        </div>
+      </div>
+      <div id="gifterNameDisplay" class="gifter-name-display">
+        <div class="name-container" id="nameContainer"></div>
+      </div>
+      <div id="topGiftersContainer" class="top-gifters-container"></div>
+      <div id="status"></div>
+    </div>
+
+    <script>
+      // ============================================================
+      // CONFIGURATION
+      // ============================================================
+      const COLOR_PRESETS = {
+        rainbow: ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#9400D3"],
+        pastel: ["#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#D4BAFF", "#FFB3F0"],
+        neon: ["#FF00CC", "#FF6600", "#FFFF00", "#00FF66", "#00CCFF", "#FF00FF", "#FF3366"],
+        sunset: ["#FF6B6B", "#FF8E53", "#FFB347", "#FFD966", "#FFE5B4", "#FFB347", "#FF8E53"],
+        ocean: ["#6B5BFF", "#4B8BFF", "#2BBDFF", "#0BDAFF", "#6BFFB5", "#4BFFEB", "#2BC9FF"],
+        party: ["#FF1493", "#FF4500", "#FFD700", "#32CD32", "#1E90FF", "#FF69B4", "#00FA9A"],
+        luxury: ["#FFD700", "#FFC800", "#FFB800", "#FFA800", "#FF9800", "#FF8800", "#FF7800"],
+        candy: ["#FF69B4", "#FFB6C1", "#FFDAB9", "#98FB98", "#87CEEB", "#DDA0DD", "#F0E68C"],
+      };
+
+      const LAYOUT_VARS = {
+        enableLeaderboard: false,
+        minGiftDiamonds: 100,
+        nameColors: {
+          preset: "neon",
+          customColors: null,
+          colorLettersOnly: true,
+        },
+        likes: {
+          bubbleSize: "78px",
+          bubbleSizeMobile: "68px",
+          iconSize: "2.5em",
+          iconSizeMobile: "2.5em",
+        },
+        giftDisplay: {
+          fadeOutDuration: 800,
+          minDuration: 2500,
+        },
+        persistence: {
+          resetHour: 14,
+          resetMinutes: 0,
+        },
+      };
+
+      // ============================================================
+      // CONFETTI EFFECT
+      // ============================================================
+      function triggerConfetti() {
+        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800', '#ff0088'];
+        
+        for (let i = 0; i < 100; i++) {
+          const confetti = document.createElement('div');
+          confetti.style.cssText = `
+            position: fixed;
+            left: ${Math.random() * 100}%;
+            top: -20px;
+            width: ${8 + Math.random() * 8}px;
+            height: ${8 + Math.random() * 8}px;
+            background: ${colors[Math.floor(Math.random() * colors.length)]};
+            opacity: 0.8;
+            pointer-events: none;
+            z-index: 10000;
+            border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+            animation: confettiFall ${2 + Math.random() * 2}s linear forwards;
+          `;
+          document.body.appendChild(confetti);
+          
+          const randomX = (Math.random() - 0.5) * 200;
+          confetti.style.setProperty('--random-x', randomX + 'px');
+          
+          setTimeout(() => confetti.remove(), 4000);
+        }
+      }
+
+      // Add confetti animation keyframes if not exists
+      if (!document.querySelector('#confettiStyle')) {
+        const style = document.createElement('style');
+        style.id = 'confettiStyle';
+        style.textContent = `
+          @keyframes confettiFall {
+            0% {
+              transform: translate(0, 0) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translate(var(--random-x, 0px), 100vh) rotate(720deg);
+              opacity: 0;
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // ============================================================
+      // MESSAGE BANNER
+      // ============================================================
+      function showMessageBanner(message, color) {
+        const banner = document.createElement('div');
+        banner.className = 'message-banner';
+        banner.textContent = message;
+        banner.style.background = `linear-gradient(135deg, ${color}, ${color}cc)`;
+        banner.style.padding = '20px 40px';
+        banner.style.borderRadius = '60px';
+        banner.style.border = '3px solid white';
+        banner.style.boxShadow = '0 0 50px rgba(0,0,0,0.5)';
+        banner.style.backgroundSize = '200% 200%';
+        banner.style.animation = 'messagePop 2s ease-out forwards';
+        document.body.appendChild(banner);
+        
+        // Trigger confetti
+        triggerConfetti();
+        
+        setTimeout(() => {
+          if (banner && banner.remove) banner.remove();
+        }, 2000);
+      }
+
+      // ============================================================
+      // DEDUPLICATION - PREVENTS SAME GIFT FROM SHOWING MULTIPLE TIMES
+      // ============================================================
+      const processedGiftIds = new Map();
+      
+      function getGiftUniqueId(name, giftName, diamonds, timestamp) {
+        const roundedTime = Math.floor(timestamp / 2000);
+        return `${name}:${giftName}:${diamonds}:${roundedTime}`;
+      }
+      
+      function isDuplicateGift(uniqueId) {
+        const now = Date.now();
+        const lastTime = processedGiftIds.get(uniqueId);
+        
+        if (lastTime && (now - lastTime) < 3000) {
+          console.log(`🚫 DUPLICATE GIFT BLOCKED: ${uniqueId} (${now - lastTime}ms ago)`);
+          return true;
+        }
+        
+        processedGiftIds.set(uniqueId, now);
+        setTimeout(() => {
+          if (processedGiftIds.get(uniqueId) === now) {
+            processedGiftIds.delete(uniqueId);
+          }
+        }, 3000);
+        
+        return false;
+      }
+
+      // ============================================================
+      // UTILITY FUNCTIONS
+      // ============================================================
+      function cleanName(name) {
+        if (!name || name === "undefined" || name === "null") return "INCOGNITO";
+        let cleaned = String(name);
+        cleaned = cleaned.replace(/<[^>]*>/g, "");
+        cleaned = cleaned.replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
+        cleaned = cleaned.replace(/javascript:/gi, "");
+        cleaned = cleaned.replace(/vbscript:/gi, "");
+        cleaned = cleaned.trim();
+        return cleaned || "INCOGNITO";
+      }
+
+      function cleanGiftName(name) {
+        if (!name) return null;
+        let cleaned = String(name);
+        cleaned = cleaned.replace(/<[^>]*>/g, "");
+        cleaned = cleaned.trim();
+        return cleaned || null;
+      }
+
+      function isRTLScript(char) {
+        const code = char.charCodeAt(0);
+        return (
+          (code >= 0x0600 && code <= 0x06ff) ||
+          (code >= 0x0750 && code <= 0x077f) ||
+          (code >= 0x08a0 && code <= 0x08ff) ||
+          (code >= 0x0590 && code <= 0x05ff) ||
+          (code >= 0xfb50 && code <= 0xfdff) ||
+          (code >= 0xfe70 && code <= 0xfeff)
+        );
+      }
+
+      function isEmoji(char) {
+        const emojiRegex = /[\u{1F000}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE0F}\u{200D}\u{20E3}]/u;
+        const simpleEmoji = /[❤️💀✨⭐🌟🔥💎🎁🎉🎊🦅🐉🌈👑💖💗💝😍🥰🌸⭐✨⚡💥]/;
+        return emojiRegex.test(char) || simpleEmoji.test(char);
+      }
+
+      function getBaseDuration(diamonds) {
+        if (diamonds < 100) return 3000;
+        if (diamonds < 1000) return 5000;
+        if (diamonds < 10000) return 8000;
+        return 10000;
+      }
+
+      function getQueueMultiplier(queueSize) {
+        if (queueSize <= 2) return 1.0;
+        if (queueSize <= 5) return 0.8;
+        if (queueSize <= 10) return 0.65;
+        return 0.5;
+      }
+
+      function getFinalDuration(diamonds, queueSize) {
+        const baseDuration = getBaseDuration(diamonds);
+        const multiplier = getQueueMultiplier(queueSize);
+        const calculatedDuration = Math.floor(baseDuration * multiplier);
+        return Math.max(calculatedDuration, LAYOUT_VARS.giftDisplay.minDuration);
+      }
+
+      function getActiveColorPalette() {
+        if (LAYOUT_VARS.nameColors.customColors && LAYOUT_VARS.nameColors.customColors.length >= 5)
+          return LAYOUT_VARS.nameColors.customColors;
+        return COLOR_PRESETS[LAYOUT_VARS.nameColors.preset] || COLOR_PRESETS.rainbow;
+      }
+
+      function getColorForIndex(index, totalLength, isEmojiChar) {
+        if (isEmojiChar && LAYOUT_VARS.nameColors.colorLettersOnly) return null;
+        const palette = getActiveColorPalette();
+        return palette[index % palette.length];
+      }
+
+      // ============================================================
+      // GIFT QUEUE SYSTEM
+      // ============================================================
+      const GiftQueue = {
+        queue: [],
+        isShowing: false,
+        currentTimeout: null,
+        add: function (giftData) {
+          const { name, giftName, diamonds, showFunction, uniqueId } = giftData;
+          
+          const alreadyInQueue = this.queue.some(g => 
+            g.uniqueId === uniqueId || 
+            (g.name === name && g.giftName === giftName && g.diamonds === diamonds && 
+             Math.abs(g.timestamp - giftData.timestamp) < 2000)
+          );
+          
+          if (alreadyInQueue) {
+            console.log(`⏩ Gift already in queue, skipping duplicate: ${name} - ${diamonds}💎`);
+            return;
+          }
+          
+          this.queue.push({ ...giftData, uniqueId });
+          this.queue.sort((a, b) => b.diamonds - a.diamonds);
+          console.log(`📦 Queue: ${this.queue.length} gifts | Top: ${this.queue[0]?.diamonds}💎`);
+          if (!this.isShowing) this.showNext();
+        },
+        showNext: function () {
+          if (this.queue.length === 0) {
+            this.isShowing = false;
+            return;
+          }
+          this.isShowing = true;
+          const next = this.queue.shift();
+          const queueSize = this.queue.length;
+          const duration = getFinalDuration(next.diamonds, queueSize);
+          console.log(`🎁 Showing: ${next.name} - ${next.diamonds}💎 | Queue: ${queueSize} left`);
+          next.showFunction(next.name, next.giftName, next.diamonds, duration);
+          const totalDuration = duration + LAYOUT_VARS.giftDisplay.fadeOutDuration;
+          this.currentTimeout = setTimeout(() => this.showNext(), totalDuration);
+        },
+        clear: function () {
+          if (this.currentTimeout) clearTimeout(this.currentTimeout);
+          this.queue = [];
+          this.isShowing = false;
+        },
+      };
+
+      // ============================================================
+      // LEADERBOARD (optional)
+      // ============================================================
+      let giftersMap = new Map(), topGifters = [], updateTimeout = null;
+      
+      function createLeaderboardRainbowHTML(name) {
+        const chars = [...name];
+        let html = "";
+        chars.forEach((char, idx) => {
+          if (char === " ") {
+            html += `<span style="width:0.35em; display:inline-block;">&nbsp;</span>`;
+          } else {
+            const isEmojiChar = isEmoji(char);
+            const color = getColorForIndex(idx, chars.length, isEmojiChar);
+            const colorStyle = color ? `color: ${color};` : "";
+            const emojiClass = isEmojiChar ? "emoji" : "";
+            const delay = (idx * 0.05).toFixed(3);
+            html += `<span class="gifter-letter ${emojiClass}" style="animation-delay: ${delay}s; ${colorStyle}">${char}</span>`;
+          }
+        });
+        return html;
+      }
+      
+      function updateTopGifters() {
+        if (!LAYOUT_VARS.enableLeaderboard) return;
+        const sorted = Array.from(giftersMap.entries()).map(([n, d]) => ({ name: n, diamonds: d })).sort((a, b) => b.diamonds - a.diamonds);
+        const newTop = sorted.slice(0, 3);
+        let changed = false;
+        if (newTop.length !== topGifters.length) changed = true;
+        else for (let i = 0; i < newTop.length; i++) if (newTop[i].name !== topGifters[i]?.name) { changed = true; break; }
+        if (changed) { topGifters = newTop; renderLeaderboard(); }
+      }
+      
+      function debouncedUpdate() { if (updateTimeout) clearTimeout(updateTimeout); updateTimeout = setTimeout(updateTopGifters, 100); }
+      
+      function addGifterDiamonds(name, diamonds) {
+        if (!LAYOUT_VARS.enableLeaderboard) return;
+        const current = giftersMap.get(name) || 0;
+        giftersMap.set(name, current + diamonds);
+        debouncedUpdate();
+        saveTopGifters();
+      }
+      
+      function getStorageKey() { return `tiktok_top_gifters_${new URLSearchParams(window.location.search).get("username") || "default"}`; }
+      
+      function saveTopGifters() {
+        if (!LAYOUT_VARS.enableLeaderboard) return;
+        try {
+          const periodKey = getCurrentPeriodKey();
+          localStorage.setItem(getStorageKey(), JSON.stringify({ periodKey, gifters: Array.from(giftersMap.entries()), username: new URLSearchParams(window.location.search).get("username") || "default" }));
+        } catch (e) {}
+      }
+      
+      function loadTopGifters() {
+        if (!LAYOUT_VARS.enableLeaderboard) return false;
+        try {
+          const raw = localStorage.getItem(getStorageKey());
+          if (!raw) return false;
+          const data = JSON.parse(raw);
+          const currentPeriodKey = getCurrentPeriodKey();
+          if (data.periodKey !== currentPeriodKey) return false;
+          giftersMap.clear();
+          data.gifters.forEach(([n, d]) => giftersMap.set(n, d));
+          updateTopGifters();
+          return true;
+        } catch (e) { return false; }
+      }
+      
+      function getUKTime() { return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/London" })); }
+      
+      function getCurrentPeriodKey() {
+        const ukNow = getUKTime();
+        const year = ukNow.getFullYear(), month = String(ukNow.getMonth() + 1).padStart(2, "0"), day = String(ukNow.getDate()).padStart(2, "0"), hour = ukNow.getHours();
+        if (hour < LAYOUT_VARS.persistence.resetHour) {
+          const yesterday = new Date(ukNow);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+        }
+        return `${year}-${month}-${day}`;
+      }
+      
+      function renderLeaderboard() {
+        if (!LAYOUT_VARS.enableLeaderboard) return;
+        const container = document.getElementById("topGiftersContainer");
+        if (!container) return;
+        if (topGifters.length === 0) { container.style.display = "none"; return; }
+        container.style.display = "flex";
+        let html = "";
+        const rankColors = ["rank-1", "rank-2", "rank-3"];
+        topGifters.forEach((gifter, idx) => {
+          html += `<div class="gifter-entry"><div class="rank-badge ${rankColors[idx]}">${idx + 1}</div><div class="gifter-name-letters">${createLeaderboardRainbowHTML(gifter.name)}</div></div>`;
+        });
+        container.innerHTML = html;
+      }
+
+      // ============================================================
+      // RAINBOW NAME DISPLAY
+      // ============================================================
+      function createRainbowNameHTML(text) {
+        const chars = [...text];
+        let html = "";
+        chars.forEach((char, idx) => {
+          const isEmojiChar = isEmoji(char);
+          const isRTL = isRTLScript(char);
+          const color = getColorForIndex(idx, chars.length, isEmojiChar);
+          const colorStyle = color ? `color: ${color};` : "";
+          const emojiClass = isEmojiChar ? "emoji" : "";
+          const rtlClass = isRTL ? "rtl-script" : "";
+          if (char === " ") {
+            html += `<span class="letter-wrapper space-wrapper"><span class="letter space">&nbsp;</span></span>`;
+          } else {
+            html += `<span class="letter-wrapper"><span class="letter ${emojiClass} ${rtlClass}" style="animation-delay: ${idx * 0.08}s; ${colorStyle}">${char}</span></span>`;
+          }
+        });
+        return html;
+      }
+
+      function adjustGifterNameFontSize() {
+        const container = document.getElementById("gifterNameDisplay");
+        const letters = document.querySelectorAll("#gifterNameDisplay .letter:not(.space)");
+        if (!letters.length || !container) return;
+        const containerWidth = container.offsetWidth;
+        let testSize = 110;
+        const minSize = 28;
+        while (testSize > minSize) {
+          let totalWidth = 0;
+          letters.forEach(() => { totalWidth += testSize * 0.65; });
+          if (totalWidth <= containerWidth * 0.92) break;
+          testSize -= 5;
+        }
+        const finalSize = Math.min(Math.max(testSize, minSize), 110);
+        document.querySelectorAll("#gifterNameDisplay .letter").forEach((letter) => { letter.style.fontSize = finalSize + "px"; });
+      }
+
+      function showGift(name, giftName, diamonds, durationMs) {
+        if (activeGiftTimeout) clearTimeout(activeGiftTimeout);
+        if (activeGiftFadeTimer) clearTimeout(activeGiftFadeTimer);
+        const cleanedName = cleanName(name);
+        const cleanedGift = cleanGiftName(giftName) || "GIFT";
+        document.getElementById("giftNameBadge").textContent = cleanedGift;
+        document.getElementById("diamondAmount").textContent = diamonds.toLocaleString();
+        document.getElementById("nameContainer").innerHTML = createRainbowNameHTML(cleanedName);
+        const giftBannerDiv = document.getElementById("giftBannerContainer");
+        const nameDisplayDiv = document.getElementById("gifterNameDisplay");
+        giftBannerDiv.style.opacity = "1";
+        giftBannerDiv.style.display = "block";
+        nameDisplayDiv.style.opacity = "1";
+        nameDisplayDiv.style.display = "flex";
+        setTimeout(() => adjustGifterNameFontSize(), 20);
+        activeGiftFadeTimer = setTimeout(() => {
+          giftBannerDiv.style.transition = `opacity ${LAYOUT_VARS.giftDisplay.fadeOutDuration}ms ease-out`;
+          giftBannerDiv.style.opacity = "0";
+          nameDisplayDiv.style.transition = `opacity ${LAYOUT_VARS.giftDisplay.fadeOutDuration}ms ease-out`;
+          nameDisplayDiv.style.opacity = "0";
+        }, durationMs);
+        activeGiftTimeout = setTimeout(() => {
+          giftBannerDiv.style.display = "none";
+          nameDisplayDiv.style.display = "none";
+          giftBannerDiv.style.opacity = "1";
+          nameDisplayDiv.style.opacity = "1";
+          giftBannerDiv.style.transition = "";
+          nameDisplayDiv.style.transition = "";
+        }, durationMs + LAYOUT_VARS.giftDisplay.fadeOutDuration);
+      }
+
+      function handleGift(name, giftName, diamonds, timestamp) {
+        if (diamonds < LAYOUT_VARS.minGiftDiamonds) {
+    console.log(`⏩ SKIPPING: ${diamonds} < ${LAYOUT_VARS.minGiftDiamonds}`);
+    return;
+  }
+        
+        const uniqueId = getGiftUniqueId(name, giftName, diamonds, timestamp);
+        
+        if (isDuplicateGift(uniqueId)) {
+          console.log(`⏩ Duplicate gift detected, skipping: ${name} - ${diamonds}💎 - ${giftName}`);
+          return;
+        }
+        
+        console.log(`🎁 Processing gift: ${name} - ${diamonds}💎 - ${giftName} (ID: ${uniqueId})`);
+        addGifterDiamonds(name, diamonds);
+        GiftQueue.add({ name, giftName, diamonds, timestamp, uniqueId, showFunction: showGift });
+      }
+
+      let activeGiftTimeout = null, activeGiftFadeTimer = null;
+
+      // ============================================================
+      // LIKES SYSTEM
+      // ============================================================
+      let recentLikePositions = [];
+      const MIN_DISTANCE_PERCENT = 12;
+      
+      function isPositionTooClose(x, y) {
+        for (let pos of recentLikePositions)
+          if (Math.hypot(x - pos.x, y - pos.y) < MIN_DISTANCE_PERCENT) return true;
+        return false;
+      }
+      
+      function getValidPosition() {
+        let attempts = 0, x, y;
+        do { x = Math.random() * 100; y = Math.random() * 100; attempts++; } 
+        while (isPositionTooClose(x, y) && attempts < 30);
+        return { x, y };
+      }
+      
+      function addToPositionHistory(x, y) {
+        recentLikePositions.push({ x, y, timestamp: Date.now() });
+        recentLikePositions = recentLikePositions.filter((p) => Date.now() - p.timestamp < 3000);
+        if (recentLikePositions.length > 8) recentLikePositions = recentLikePositions.slice(-8);
+      }
+      
+      function getRandomIcon() {
+        const icons = ["❤️", "💖", "💗", "💝", "♥️", "😍", "🥰", "🌸"];
+        return icons[Math.floor(Math.random() * icons.length)];
+      }
+      
+      let likesQueue = [], isProcessingLikes = false, likeBatchTimeout = null;
+      
+      function createBurstEffect(x, y) {
+        const container = document.getElementById("likesContainer");
+        const particleCount = 12 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < particleCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 40 + Math.random() * 80;
+          const tx = Math.cos(angle) * speed;
+          const ty = Math.sin(angle) * speed;
+          const particle = document.createElement("div");
+          particle.className = "burst-particle";
+          particle.style.background = `radial-gradient(circle, hsl(${Math.random() * 360},100%,65%), hsl(${Math.random() * 360},80%,55%))`;
+          particle.style.left = x - 4 + "px";
+          particle.style.top = y - 4 + "px";
+          particle.style.setProperty("--tx", tx + "px");
+          particle.style.setProperty("--ty", ty + "px");
+          container.appendChild(particle);
+          setTimeout(() => { if (particle && particle.remove) particle.remove(); }, 700);
+        }
+        for (let s = 0; s < 6; s++) {
+          const spark = document.createElement("div");
+          spark.className = "burst-spark";
+          const angleSpark = Math.random() * Math.PI * 2;
+          const dist = 30 + Math.random() * 70;
+          spark.style.setProperty("--sx", Math.cos(angleSpark) * dist + "px");
+          spark.style.setProperty("--sy", Math.sin(angleSpark) * dist + "px");
+          spark.style.left = x - 2 + "px";
+          spark.style.top = y - 2 + "px";
+          container.appendChild(spark);
+          setTimeout(() => { if (spark && spark.remove) spark.remove(); }, 600);
+        }
+      }
+      
+      function createLikeItem() {
+        const icon = getRandomIcon();
+        const likeItem = document.createElement("div");
+        likeItem.className = "like-item";
+        const pos = getValidPosition();
+        likeItem.style.left = `${pos.x}%`;
+        likeItem.style.top = `${pos.y}%`;
+        addToPositionHistory(pos.x, pos.y);
+        const isMobile = window.innerWidth < 768;
+        const bubbleSize = isMobile ? LAYOUT_VARS.likes.bubbleSizeMobile : LAYOUT_VARS.likes.bubbleSize;
+        const iconSize = isMobile ? LAYOUT_VARS.likes.iconSizeMobile : LAYOUT_VARS.likes.iconSize;
+        likeItem.innerHTML = `<div class="bubble-wrapper" style="width:${bubbleSize};height:${bubbleSize};"><div class="bubble-ring"></div><span class="like-icon" style="font-size:${iconSize};">${icon}</span></div>`;
+        document.getElementById("likesContainer").appendChild(likeItem);
+        
+        setTimeout(() => { likeItem.classList.add("float-up"); }, 1000);
+        
+        const popTimeout = setTimeout(() => {
+          if (likeItem && likeItem.parentNode) {
+            const rect = likeItem.getBoundingClientRect();
+            if (rect && rect.width > 0) {
+              createBurstEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            } else {
+              createBurstEffect((pos.x / 100) * window.innerWidth, (pos.y / 100) * window.innerHeight);
+            }
+            likeItem.remove();
+          }
+        }, 1500);
+        
+        likeItem.addEventListener("animationend", (e) => {
+          if (e.animationName === "likeFloatUp" && likeItem.parentNode) {
+            clearTimeout(popTimeout);
+            const rect = likeItem.getBoundingClientRect();
+            if (rect.width) createBurstEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            likeItem.remove();
+          }
+        });
+      }
+      
+      function processLikeEvent(likeCount) {
+        if (!likeCount) return;
+        const num = Math.min(likeCount, 6);
+        for (let i = 0; i < num; i++) likesQueue.push(1);
+        if (likeBatchTimeout) clearTimeout(likeBatchTimeout);
+        likeBatchTimeout = setTimeout(() => { if (!isProcessingLikes && likesQueue.length) processLikesQueue(); }, 60);
+      }
+      
+      function processLikesQueue() {
+        if (isProcessingLikes || !likesQueue.length) return;
+        isProcessingLikes = true;
+        const toShow = likesQueue.slice(0, 6);
+        likesQueue = likesQueue.slice(6);
+        toShow.forEach(() => createLikeItem());
+        setTimeout(() => { isProcessingLikes = false; if (likesQueue.length) processLikesQueue(); }, 140);
+      }
+
+      // ============================================================
+      // SOCKET CONNECTION
+      // ============================================================
+      let socket = null, reconnectTimeout = null;
+      let isSocketConnected = false;
+      
+      function connectSocket() {
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        try {
+          console.log("🔄 Connecting to socket...");
+          document.getElementById("status").style.background = "#ffa500";
+          socket = io(window.location.origin, {
+            path: "/api/socket",
+            transports: ["websocket", "polling"],
+            reconnectionAttempts: 5,
+            timeout: 10000,
+          });
+          
+          socket.on("connect", () => {
+            console.log("✅ Socket connected successfully!");
+            isSocketConnected = true;
+            document.getElementById("status").style.background = "#00ff66";
+            const username = new URLSearchParams(window.location.search).get("username") || "default";
+            socket.emit("connect-tiktok", username);
+            console.log(`📡 Connected to TikTok stream: ${username}`);
+          });
+          
+          socket.on("connect_error", (error) => {
+            console.log("⚠️ Socket connection error:", error);
+            document.getElementById("status").style.background = "#ff3b3b";
+            isSocketConnected = false;
+            reconnectTimeout = setTimeout(connectSocket, 5000);
+          });
+          
+          // Handle control events from the control panel
+          socket.on("well-done", () => {
+            console.log("🎉 WELL DONE! event received!");
+            showMessageBanner("WELL DONE! 🎉", "#FFD700");
+          });
+          
+          socket.on("good-game", () => {
+            console.log("🎮 GOOD GAME! event received!");
+            showMessageBanner("GOOD GAME! 🎮", "#4CAF50");
+          });
+          
+          socket.on("tiktok-event", (ev) => {
+            if (!isSocketConnected) {
+              console.log("⏸️ Ignoring event - socket not connected");
+              return;
+            }
+            
+            if (ev?.type === "gift") {
+              const name = cleanName(ev.nickname || ev.username);
+              const diamonds = ev.totalDiamonds || 0;
+              const giftName = cleanGiftName(ev.giftName);
+              const timestamp = ev.timestamp || Date.now();
+              console.log(`📨 Received gift event: ${name} - ${diamonds}💎 - ${giftName}`);
+              handleGift(name, giftName, diamonds, timestamp);
+            }
+            
+            if (ev?.type === "like") {
+              const likeCount = ev.count || 1;
+              console.log(`❤️ Received like event: ${likeCount} likes`);
+              processLikeEvent(likeCount);
+            }
+          });
+          
+          socket.on("disconnect", () => {
+            console.log("🔌 Socket disconnected");
+            document.getElementById("status").style.background = "#ff3b3b";
+            isSocketConnected = false;
+            reconnectTimeout = setTimeout(connectSocket, 5000);
+          });
+          
+        } catch (e) {
+          console.error("❌ Socket error:", e);
+          reconnectTimeout = setTimeout(connectSocket, 5000);
+        }
+      }
+
+      // ============================================================
+      // INITIALIZATION
+      // ============================================================
+      window.addEventListener("load", () => {
+        console.log("🎬 TikTok Overlay Initialized");
+        console.log(`💰 Minimum gift threshold: ${LAYOUT_VARS.minGiftDiamonds} diamonds`);
+        loadTopGifters();
+        connectSocket();
+        
+        const nameObserver = new ResizeObserver(() => {
+          if (document.getElementById("gifterNameDisplay").style.display === "flex") {
+            adjustGifterNameFontSize();
+          }
+        });
+        nameObserver.observe(document.getElementById("gifterNameDisplay"));
+      });
+      
+      window.addEventListener("resize", () => {
+        if (document.getElementById("gifterNameDisplay").style.display === "flex") {
+          adjustGifterNameFontSize();
+        }
+      });
+    </script>
+  </body>
+</html>

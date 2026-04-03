@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-interface UserPageProps {
-  params: {
-    id: string;
-  };
-}
-
-export default function UserOverlayPage({ params }: UserPageProps) {
+export default function OverlayPage() {
   const [mounted, setMounted] = useState(false);
   const socketRef = useRef<any>(null);
   const activeGiftTimeoutRef = useRef<any>(null);
@@ -28,8 +22,8 @@ export default function UserOverlayPage({ params }: UserPageProps) {
   const [giftQueue, setGiftQueue] = useState<any[]>([]);
   const [isShowingGift, setIsShowingGift] = useState(false);
 
-  // Get the streamer this overlay is for from URL params
-  const MY_STREAMER = params.id;
+  // Get the streamer this overlay is for
+  const MY_STREAMER = new URLSearchParams(window.location.search).get('username') || '';
   console.log(`🎯 Overlay configured for streamer: ${MY_STREAMER}`);
 
   // Helper functions
@@ -830,118 +824,118 @@ export default function UserOverlayPage({ params }: UserPageProps) {
     // Load Socket.IO dynamically
     const script = document.createElement('script');
     script.src = 'https://cdn.socket.io/4.5.0/socket.io.min.js';
-    script.onload = () => {
-      const socket = (window as any).io(window.location.origin, {
-        path: '/api/socket',
-        transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        timeout: 10000
-      });
+  script.onload = () => {
+  const socket = (window as any).io(window.location.origin, {
+    path: '/api/socket',
+    transports: ['websocket', 'polling'],
+    reconnectionAttempts: 5,
+    timeout: 10000
+  });
+  
+  socketRef.current = socket;
+  const statusEl = document.getElementById('status');
+  
+  socket.on('connect', () => {
+    console.log('✅ Socket connected!');
+    setIsConnected(true);
+    if (statusEl) statusEl.style.background = '#00ff66';
+    socket.emit('connect-tiktok', MY_STREAMER);
+    console.log(`✅ Connecting to TikTok: ${MY_STREAMER}`);
+  });
+  
+  socket.on('connect_error', (err: any) => {
+    console.error('Socket connection error:', err);
+    setIsConnected(false);
+    if (statusEl) statusEl.style.background = '#ff3b3b';
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected');
+    setIsConnected(false);
+    if (statusEl) statusEl.style.background = '#ff3b3b';
+  });
+  
+  // TikTok events - NO FILTERING NEEDED (only one streamer)
+  socket.on('tiktok-event', (ev: any) => {
+    console.log('📥 TikTok event:', ev?.type);
+    
+    if (ev?.type === 'gift') {
+      const name = cleanName(ev.nickname || ev.username);
+      const diamonds = ev.totalDiamonds || 0;
+      const giftName = cleanGiftName(ev.giftName);
+      handleGift(name, giftName || "", diamonds);
+    }
+    if (ev?.type === 'like') {
+      processLikeEvent(ev.likeCount || 1);
+    }
+    if (ev?.type === 'follow') {
+      console.log(`➕ ${ev.username} followed!`);
+      // Optional: Add follow animation
+    }
+    if (ev?.type === 'join') {
+      console.log(`👤 ${ev.username} joined`);
+      // Optional: Add join animation
+    }
+  });
+  
+  // Control panel events - GLOBAL (no target filtering)
+  socket.on('1x-points', () => {
+    console.log('💰 1X POINTS ACTIVATED');
+    showControlBanner('💰 1X POINTS', 2000);
+    activeMultiplierRef.current = 1;
+  });
+  
+  socket.on('2x-points', () => {
+    console.log('🔥 2X POINTS ACTIVATED!');
+    showControlBanner('🔥 2X POINTS ACTIVE!', 3000);
+    activeMultiplierRef.current = 2;
+    triggerScreenPulse('#FFD700');
+  });
+  
+  socket.on('3x-points', () => {
+    console.log('💎 3X POINTS ACTIVATED!');
+    showControlBanner('💎 3X POINTS ACTIVE!', 3000);
+    activeMultiplierRef.current = 3;
+    triggerScreenPulse('#FF00CC');
+  });
+  
+  socket.on('glove-powerup', () => {
+    console.log('🧤 GLOVE POWER-UP!');
+    showControlBanner('🧤 GLOVE POWER-UP!', 2000);
+    triggerGloveEffect();
+  });
+  
+  socket.on('mvp-crown', (data: any) => {
+    const username = data?.username || 'Top Gifter';
+    console.log(`👑 MVP: ${username}`);
+    showControlBanner(`👑 MVP: ${username}`, 3000);
+  });
+  
+  socket.on('confetti', () => {
+    console.log('🎉 CONFETTI!');
+    triggerConfetti();
+  });
+  
+  socket.on('fireworks', () => {
+    console.log('🎆 FIREWORKS!');
+    triggerFireworks();
+  });
+  
+  // Any custom events (global)
+  socket.onAny((eventName: string, ...args: any[]) => {
+    // Skip internal events
+    if (!eventName.startsWith('tiktok') && 
+        eventName !== 'connect' && 
+        eventName !== 'disconnect' && 
+        eventName !== 'connect_error' &&
+        eventName !== 'connection-result' &&
+        eventName !== 'connected-stream') {
       
-      socketRef.current = socket;
-      const statusEl = document.getElementById('status');
-      
-      socket.on('connect', () => {
-        console.log('✅ Socket connected!');
-        setIsConnected(true);
-        if (statusEl) statusEl.style.background = '#00ff66';
-        socket.emit('connect-tiktok', MY_STREAMER);
-        console.log(`✅ Connecting to TikTok: ${MY_STREAMER}`);
-      });
-      
-      socket.on('connect_error', (err: any) => {
-        console.error('Socket connection error:', err);
-        setIsConnected(false);
-        if (statusEl) statusEl.style.background = '#ff3b3b';
-      });
-      
-      socket.on('disconnect', () => {
-        console.log('Socket disconnected');
-        setIsConnected(false);
-        if (statusEl) statusEl.style.background = '#ff3b3b';
-      });
-      
-      // TikTok events - NO FILTERING NEEDED (only one streamer)
-      socket.on('tiktok-event', (ev: any) => {
-        console.log('📥 TikTok event:', ev?.type);
-        
-        if (ev?.type === 'gift') {
-          const name = cleanName(ev.nickname || ev.username);
-          const diamonds = ev.totalDiamonds || 0;
-          const giftName = cleanGiftName(ev.giftName);
-          handleGift(name, giftName || "", diamonds);
-        }
-        if (ev?.type === 'like') {
-          processLikeEvent(ev.likeCount || 1);
-        }
-        if (ev?.type === 'follow') {
-          console.log(`➕ ${ev.username} followed!`);
-          // Optional: Add follow animation
-        }
-        if (ev?.type === 'join') {
-          console.log(`👤 ${ev.username} joined`);
-          // Optional: Add join animation
-        }
-      });
-      
-      // Control panel events - GLOBAL (no target filtering)
-      socket.on('1x-points', () => {
-        console.log('💰 1X POINTS ACTIVATED');
-        showControlBanner('💰 1X POINTS', 2000);
-        activeMultiplierRef.current = 1;
-      });
-      
-      socket.on('2x-points', () => {
-        console.log('🔥 2X POINTS ACTIVATED!');
-        showControlBanner('🔥 2X POINTS ACTIVE!', 3000);
-        activeMultiplierRef.current = 2;
-        triggerScreenPulse('#FFD700');
-      });
-      
-      socket.on('3x-points', () => {
-        console.log('💎 3X POINTS ACTIVATED!');
-        showControlBanner('💎 3X POINTS ACTIVE!', 3000);
-        activeMultiplierRef.current = 3;
-        triggerScreenPulse('#FF00CC');
-      });
-      
-      socket.on('glove-powerup', () => {
-        console.log('🧤 GLOVE POWER-UP!');
-        showControlBanner('🧤 GLOVE POWER-UP!', 2000);
-        triggerGloveEffect();
-      });
-      
-      socket.on('mvp-crown', (data: any) => {
-        const username = data?.username || 'Top Gifter';
-        console.log(`👑 MVP: ${username}`);
-        showControlBanner(`👑 MVP: ${username}`, 3000);
-      });
-      
-      socket.on('confetti', () => {
-        console.log('🎉 CONFETTI!');
-        triggerConfetti();
-      });
-      
-      socket.on('fireworks', () => {
-        console.log('🎆 FIREWORKS!');
-        triggerFireworks();
-      });
-      
-      // Any custom events (global)
-      socket.onAny((eventName: string, ...args: any[]) => {
-        // Skip internal events
-        if (!eventName.startsWith('tiktok') && 
-            eventName !== 'connect' && 
-            eventName !== 'disconnect' && 
-            eventName !== 'connect_error' &&
-            eventName !== 'connection-result' &&
-            eventName !== 'connected-stream') {
-          
-          console.log(`🎨 Custom event: ${eventName}`, args[0]);
-          showControlBanner(`✨ ${eventName.toUpperCase()} ✨`, 2000);
-        }
-      });
-    };
+      console.log(`🎨 Custom event: ${eventName}`, args[0]);
+      showControlBanner(`✨ ${eventName.toUpperCase()} ✨`, 2000);
+    }
+  });
+};
     document.head.appendChild(script);
     
     // Demo mode fallback
@@ -968,7 +962,7 @@ export default function UserOverlayPage({ params }: UserPageProps) {
       if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
       if (likeBatchTimeoutRef.current) clearTimeout(likeBatchTimeoutRef.current);
     };
-  }, [MY_STREAMER]);
+  }, []);
 
   if (!mounted) return null;
 

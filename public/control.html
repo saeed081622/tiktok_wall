@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+        
+        .status {
+            padding: 12px;
+            margin-bottom: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            font-family: monospace;
+            text-align: center;
+        }
+        
+        .connected { color: #0f0; }
+        .disconnected { color: #f00; }
+        
+        .current-streamer {
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #FFD700;
+            text-align: center;
+        }
+        
+        .current-streamer span {
+            color: #FFD700;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            color: #FFD700;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            border-left: 3px solid #FFD700;
+            padding-left: 10px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-multiplier { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .btn-powerup { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .btn-effect { background: linear-gradient(135deg, #fa709a, #fee140); }
+        
+        .mvp-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .mvp-input input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: #2d2d3a;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .mvp-input input::placeholder {
+            color: #888;
+        }
+        
+        .log {
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            height: 250px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        
+        .log-entry {
+            margin: 3px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 3px 0;
+        }
+        
+        .keyboard-hint {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+        
+        kbd {
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Stream Control Panel</h1>
+        
+        <div class="status" id="status">🔴 Connecting...</div>
+        
+        <div class="current-streamer">
+            📡 Current Streamer: <span id="currentStreamer">None</span>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">💰 Point Multipliers</div>
+            <button class="btn-multiplier" onclick="sendCommand('1x-points')">1X Points</button>
+            <button class="btn-multiplier" onclick="sendCommand('2x-points')">🔥 2X Points</button>
+            <button class="btn-multiplier" onclick="sendCommand('3x-points')">💎 3X Points</button>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">⚡ Power-Ups</div>
+            <button class="btn-powerup" onclick="sendCommand('glove-powerup')">🧤 Glove</button>
+            
+            <div class="mvp-input">
+                <input type="text" id="mvpName" placeholder="Enter gifter name (e.g., 'SΛEΞD JΛTT 🦅')">
+                <button onclick="sendMVP()">👑 Send MVP</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">🎉 Special Messages</div>
+            <button class="btn-effect" onclick="sendCommand('well-done')">🎊 WELL DONE!</button>
+            <button class="btn-effect" onclick="sendCommand('good-game')">🎆 GOOD GAME!</button>
+        </div>
+        
+        <div class="log" id="log">
+            📋 Event Log:<br>
+        </div>
+        
+        <div class="keyboard-hint">
+            ⌨️ Keyboard Shortcuts: 
+            <kbd>1</kbd> 1X &nbsp; <kbd>2</kbd> 2X &nbsp; <kbd>3</kbd> 3X &nbsp;
+            <kbd>G</kbd> Glove &nbsp; <kbd>M</kbd> MVP &nbsp;
+            <kbd>W</kbd> WELL DONE! &nbsp; <kbd>K</kbd> GOOD GAME!
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        
+        function addLog(msg, isError = false) {
+            const log = document.getElementById('log');
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.style.color = isError ? '#f66' : '#0f0';
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            log.appendChild(div);
+            div.scrollIntoView();
+            
+            while (log.children.length > 100) {
+                log.removeChild(log.children[1]);
+            }
+        }
+        
+        function sendCommand(eventName) {
+            if (socket && socket.connected) {
+                const eventData = {
+                    command: eventName,
+                    timestamp: Date.now(),
+                    from: 'control-panel'
+                };
+                
+                addLog(`📤 SENDING: ${eventName} → GLOBAL`);
+                socket.emit('control-event', eventName, eventData);
+            } else {
+                addLog(`❌ Cannot send: Socket not connected!`, true);
+                alert('Not connected!');
+            }
+        }
+        
+        function sendMVP() {
+            const mvpName = document.getElementById('mvpName').value.trim();
+            if (!mvpName) {
+                alert('Please enter a gifter name for MVP!');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                const eventData = {
+                    username: mvpName,
+                    from: 'control-panel',
+                    timestamp: Date.now()
+                };
+                
+                addLog(`📤 SENDING: mvp-crown → GLOBAL with name: ${mvpName}`);
+                socket.emit('control-event', 'mvp-crown', eventData);
+            } else {
+                addLog(`❌ Cannot send: Not connected!`, true);
+                alert('Not connected!');
+            }
+        }
+        
+        function connect() {
+            addLog('🔌 Connecting to socket...');
+            socket = io(window.location.origin, {
+                path: '/api/socket',
+                transports: ['websocket', 'polling']
+            });
+            
+            socket.on('connect', () => {
+                addLog(`✅ Connected! ID: ${socket.id}`);
+                document.getElementById('status').innerHTML = `🟢 Connected (${socket.id})`;
+                document.getElementById('status').style.color = '#0f0';
+                
+                // Get current streamer
+                setTimeout(() => {
+                    socket.emit('get-stream');
+                }, 500);
+            });
+            
+            socket.on('connect_error', (err) => {
+                addLog(`❌ Error: ${err.message}`, true);
+                document.getElementById('status').innerHTML = '🔴 Connection failed';
+                document.getElementById('status').style.color = '#f00';
+            });
+            
+            socket.on('disconnect', () => {
+                addLog('⚠️ Disconnected', true);
+                document.getElementById('status').innerHTML = '🔴 Disconnected';
+                document.getElementById('status').style.color = '#f00';
+            });
+            
+            socket.on('connected-stream', (data) => {
+                const streamerSpan = document.getElementById('currentStreamer');
+                if (data.streamer) {
+                    streamerSpan.innerHTML = `@${data.streamer}`;
+                    streamerSpan.style.color = '#0f0';
+                } else {
+                    streamerSpan.innerHTML = 'None';
+                    streamerSpan.style.color = '#FFD700';
+                }
+            });
+            
+            // Listen for echo back
+            socket.onAny((event, data) => {
+                if (event !== 'connect' && event !== 'disconnect' && event !== 'connected-stream') {
+                    addLog(`📥 ECHO: ${event}`);
+                }
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                return;
+            }
+            
+            switch(e.key.toLowerCase()) {
+                case '1': sendCommand('1x-points'); break;
+                case '2': sendCommand('2x-points'); break;
+                case '3': sendCommand('3x-points'); break;
+                case 'g': sendCommand('glove-powerup'); break;
+                case 'm': 
+                    const mvpInput = document.getElementById('mvpName');
+                    if (mvpInput.value.trim()) {
+                        sendMVP();
+                    } else {
+                        mvpInput.focus();
+                    }
+                    break;
+                case 'w': sendCommand('well-done'); break;
+                case 'k': sendCommand('good-game'); break;
+            }
+        });
+        
+        connect();
+    </script>
+</body>
+</html>

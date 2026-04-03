@@ -1,8 +1,9 @@
 import { TikTokLiveConnection, WebcastEvent, WebcastGiftMessage, WebcastChatMessage, WebcastMemberMessage, ClientEventMap } from 'tiktok-live-connector';
 import { Server as SocketServer } from 'socket.io';
 
-// Store multiple TikTok connections keyed by username
-let tiktokConnections: Map<string, TikTokLiveConnection> = new Map();
+// Single connection instead of Map
+let currentConnection: TikTokLiveConnection | null = null;
+let currentStreamerName: string | null = null;
 let io: SocketServer | null = null;
 
 // Keep all your existing interfaces exactly as they were
@@ -66,7 +67,7 @@ export interface GiftEvent {
     repeatCount: number;
     totalDiamonds: number;
     isStreak: boolean;
-    streamer?: string;  // NEW: identifies which streamer this gift is for
+    streamer?: string;
     timestamp: number;
 }
 
@@ -74,7 +75,7 @@ export interface FollowEvent {
     type: 'follow';
     username: string;
     nickname: string;
-    streamer?: string;  // NEW
+    streamer?: string;
     timestamp: number;
 }
 
@@ -83,7 +84,7 @@ export interface ChatEvent {
     username: string;
     nickname: string;
     comment: string;
-    streamer?: string;  // NEW
+    streamer?: string;
     timestamp: number;
 }
 
@@ -91,7 +92,7 @@ export interface JoinEvent {
     type: 'join';
     username: string;
     nickname: string;
-    streamer?: string;  // NEW
+    streamer?: string;
     timestamp: number;
 }
 
@@ -99,13 +100,13 @@ export interface SystemEvent {
     type: 'system';
     message: string;
     subType?: 'connected' | 'disconnected' | 'error';
-    streamer?: string;  // NEW
+    streamer?: string;
     timestamp: number;
 }
 
 export type TikTokEvent = GiftEvent | FollowEvent | ChatEvent | JoinEvent | SystemEvent | BattleMVPEvent | BattleStartEvent | BattleEndEvent;
 
-// Battle state tracking (now supports multiple streamers)
+// Battle state tracking (single)
 interface BattleState {
     battleId: string;
     streamer: string;
@@ -114,7 +115,7 @@ interface BattleState {
     lastUpdate: number;
 }
 
-const activeBattles: Map<string, BattleState> = new Map();
+let activeBattle: BattleState | null = null;
 
 export function setSocketIO(socketIO: SocketServer) {
     io = socketIO;
@@ -128,10 +129,10 @@ export async function connectToTikTok(username: string): Promise<{ success: bool
 
     const cleanUsername = username.replace('@', '');
     
-    // Check if already connected to this username
-    if (tiktokConnections.has(cleanUsername)) {
-        console.log(`✅ Already connected to ${cleanUsername}, reusing connection`);
-        return { success: true, roomId: 'existing' };
+    // Disconnect existing connection first
+    if (currentConnection) {
+        console.log(`🔄 Disconnecting from ${currentStreamerName} to connect to ${cleanUsername}`);
+        await disconnectFromTikTok();
     }
 
     try {
@@ -140,13 +141,19 @@ export async function connectToTikTok(username: string): Promise<{ success: bool
         const connection = new TikTokLiveConnection(cleanUsername, {
             enableExtendedGiftInfo: true,
             processInitialData: false,
-            requestPollingIntervalMs: 1000
+            requestPollingIntervalMs: 1000,
+            webClientHeaders: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.tiktok.com/',
+                'Origin': 'https://www.tiktok.com'
+            }
         });
 
         const state = await connection.connect();
         console.log(`✅ Connected to TikTok Live: ${cleanUsername} | Room ID: ${state.roomId}`);
         
-        tiktokConnections.set(cleanUsername, connection);
+        currentConnection = connection;
+        currentStreamerName = cleanUsername;
         setupEventListenersForConnection(connection, cleanUsername);
 
         // Broadcast connection status
@@ -296,7 +303,7 @@ function setupEventListenersForConnection(connection: TikTokLiveConnection, stre
             });
         });
         
-        activeBattles.set(battleId, battleState);
+        activeBattle = battleState;
         
         const battleStartEvent: BattleStartEvent = {
             type: 'battle_start',
@@ -316,29 +323,19 @@ function setupEventListenersForConnection(connection: TikTokLiveConnection, stre
     connection.on(WebcastEvent.LINK_MIC_ARMIES, (data: any) => {
         const battleId = data.battleId;
         
-        if (!battleId) {
-            const activeBattleIds = Array.from(activeBattles.keys());
-            const matchingBattle = activeBattleIds.find(id => id.startsWith(streamerName));
-            if (matchingBattle) {
-                updateBattleState(matchingBattle, data);
-            }
-        } else {
-            const fullBattleId = `${streamerName}_${battleId}`;
-            updateBattleState(fullBattleId, data);
+        if (!activeBattle) return;
+        
+        if (!battleId || activeBattle.battleId.includes(battleId)) {
+            updateBattleState(activeBattle, data);
         }
     });
 
     // DISCONNECT
     connection.on('disconnected' as keyof ClientEventMap, () => {
         console.log(`🔌 [${streamerName}] Disconnected from TikTok`);
-        tiktokConnections.delete(streamerName);
-        
-        // Clean up battles for this streamer
-        for (const [battleId, battleState] of activeBattles) {
-            if (battleState.streamer === streamerName) {
-                activeBattles.delete(battleId);
-            }
-        }
+        currentConnection = null;
+        currentStreamerName = null;
+        activeBattle = null;
         
         io?.emit('tiktok-event', {
             type: 'system',
@@ -362,13 +359,7 @@ function setupEventListenersForConnection(connection: TikTokLiveConnection, stre
     });
 }
 
-function updateBattleState(battleId: string, data: any) {
-    let battleState = activeBattles.get(battleId);
-    
-    if (!battleState) {
-        return;
-    }
-    
+function updateBattleState(battleState: BattleState, data: any) {
     battleState.lastUpdate = Date.now();
     
     // Handle team battles
@@ -431,7 +422,7 @@ function updateBattleState(battleId: string, data: any) {
     if (currentMVP && currentMVP.score > 0) {
         const mvpEvent: BattleMVPEvent = {
             type: 'battle_mvp',
-            battleId: battleId,
+            battleId: battleState.battleId,
             mvp: currentMVP,
             teamScores: Array.from(battleState.teams.entries()).map(([teamId, teamInfo]) => ({
                 teamId,
@@ -445,11 +436,11 @@ function updateBattleState(battleId: string, data: any) {
     }
     
     if (data.action === 'finish' || data.battleStatus === 'finished') {
-        emitBattleEnd(battleId, battleState);
+        emitBattleEnd(battleState);
     }
 }
 
-function emitBattleEnd(battleId: string, battleState: BattleState) {
+function emitBattleEnd(battleState: BattleState) {
     let finalMVP: { userId: string; username: string; nickname: string; score: number; teamId?: string } | null = null;
     let highestScore = -1;
     let allScores: Array<{ userId: string; username: string; nickname: string; score: number }> = [];
@@ -493,7 +484,7 @@ function emitBattleEnd(battleId: string, battleState: BattleState) {
     
     const battleEndEvent: BattleEndEvent = {
         type: 'battle_end',
-        battleId: battleId,
+        battleId: battleState.battleId,
         winner: winner || undefined,
         mvp: finalMVP || undefined,
         finalScores: allScores.sort((a, b) => b.score - a.score),
@@ -503,58 +494,31 @@ function emitBattleEnd(battleId: string, battleState: BattleState) {
     console.log(`🏁 [${battleState.streamer}] Battle ended! MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
     io?.emit('tiktok-event', { ...battleEndEvent, streamer: battleState.streamer });
     
-    activeBattles.delete(battleId);
+    activeBattle = null;
 }
 
 // ========== HELPER FUNCTIONS ==========
 
-export function isTikTokConnected(username?: string): boolean {
-    if (username) {
-        return tiktokConnections.has(username);
-    }
-    return tiktokConnections.size > 0;
+export function isTikTokConnected(): boolean {
+    return currentConnection !== null;
 }
 
-export function getConnectedUsernames(): string[] {
-    return Array.from(tiktokConnections.keys());
+export function getCurrentStreamer(): string | null {
+    return currentStreamerName;
 }
 
-export async function disconnectFromTikTok(username?: string) {
-    if (username) {
-        const connection = tiktokConnections.get(username);
-        if (connection) {
-            connection.disconnect();
-            tiktokConnections.delete(username);
-            console.log(`🔌 Disconnected from ${username}`);
-            
-            // Clean up battles for this streamer
-            for (const [battleId, battleState] of activeBattles) {
-                if (battleState.streamer === username) {
-                    activeBattles.delete(battleId);
-                }
-            }
-            
-            io?.emit('tiktok-event', {
-                type: 'system',
-                subType: 'disconnected',
-                message: `Disconnected from @${username}'s live`,
-                streamer: username,
-                timestamp: Date.now()
-            } as SystemEvent);
-        }
-    } else {
-        // Disconnect all
-        for (const [name, connection] of tiktokConnections) {
-            connection.disconnect();
-            console.log(`🔌 Disconnected from ${name}`);
-        }
-        tiktokConnections.clear();
-        activeBattles.clear();
+export async function disconnectFromTikTok() {
+    if (currentConnection) {
+        currentConnection.disconnect();
+        currentConnection = null;
+        console.log(`🔌 Disconnected from ${currentStreamerName}`);
+        currentStreamerName = null;
+        activeBattle = null;
         
         io?.emit('tiktok-event', {
             type: 'system',
             subType: 'disconnected',
-            message: 'Disconnected from all streams',
+            message: 'Disconnected from TikTok',
             timestamp: Date.now()
         } as SystemEvent);
     }

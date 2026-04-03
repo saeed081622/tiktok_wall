@@ -34,6 +34,13 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     console.log('✅ Client connected:', socket.id);
     
+    // ========== CONTROL PANEL EVENT FORWARDER ==========
+    socket.on('control-event', (eventName, eventData) => {
+      console.log(`🎮 Control event from ${socket.id}: ${eventName}`, eventData);
+      // Send to ALL connected clients (including the sender)
+      io.emit(eventName, eventData);
+    });
+    
     socket.on('connect-tiktok', async (username) => {
       console.log(`🔄 Connecting to TikTok live: ${username}`);
       
@@ -45,7 +52,6 @@ app.prepare().then(() => {
         const cleanUsername = username.replace('@', '');
         
         tiktokConnection = new TikTokLiveConnection(cleanUsername, {
-          // 🔑 YOUR EULERSTREAM API KEY - Free tier, 10,000 requests/day
           signApiKey: 'euler_ODE4YjUxNTZiNzg2NDgzN2E2OTQwN2QwZjkwZjA0MWU3OTNlMjEzYWRmOTIwNjFlZDVhNzY1',
           enableExtendedGiftInfo: false,
           processInitialData: true,
@@ -82,7 +88,7 @@ app.prepare().then(() => {
         tiktokConnection.on(WebcastEvent.GIFT, (data) => {
           console.log(`🎁 Gift: ${data.user?.uniqueId} sent ${data.giftDetails?.giftName || 'a gift'}`);
           
-          socket.emit('tiktok-event', {
+          io.emit('tiktok-event', {
             type: 'gift',
             username: data.user?.uniqueId || 'anonymous',
             nickname: data.user?.nickname || 'Anonymous',
@@ -97,7 +103,7 @@ app.prepare().then(() => {
 
         tiktokConnection.on(WebcastEvent.LIKE, (data) => {
           console.log(`❤️ Like: ${data.user?.uniqueId} sent ${data.likeCount} likes`);
-          socket.emit('tiktok-event', {
+          io.emit('tiktok-event', {
             type: 'like',
             username: data.user?.uniqueId || 'anonymous',
             nickname: data.user?.nickname || 'Anonymous',
@@ -109,7 +115,7 @@ app.prepare().then(() => {
 
         tiktokConnection.on('disconnected', () => {
           console.log('🔌 Disconnected from TikTok');
-          socket.emit('tiktok-status', {
+          io.emit('tiktok-status', {
             type: 'disconnected',
             message: 'Disconnected from TikTok'
           });
@@ -155,6 +161,7 @@ app.prepare().then(() => {
     console.log(`📁 Next.js + Socket.io combined`);
     console.log(`🌐 Allowed origins: https://saeedofficial.com, http://localhost:3000`);
     console.log(`🔑 EulerStream API key loaded (10,000 requests/day)`);
+    console.log(`✅ Control event forwarder ACTIVE (using io.emit)`);
     console.log('\nWaiting for connections...\n');
   });
 });
