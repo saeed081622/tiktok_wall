@@ -1,6 +1,6 @@
 import { Server as SocketServer } from 'socket.io';
 import { NextRequest } from 'next/server';
-import { setSocketIO, connectToTikTok, disconnectFromTikTok } from '@/app/lib/tiktokClient';
+import { setSocketIO, connectToTikTok, disconnectFromTikTok, getConnectedUsernames } from '@/app/lib/tiktokClient';
 
 let io: SocketServer | null = null;
 let serverStarted = false;
@@ -22,26 +22,35 @@ export async function GET(req: NextRequest) {
             socketServer.on('connection', (socket) => {
                 console.log('Client connected:', socket.id);
 
-                // ========== NEW: CONTROL PANEL EVENT FORWARDER ==========
-                // This listens for commands from the control panel and forwards them to all connected clients
+                // ========== CONTROL PANEL EVENT FORWARDER ==========
                 socket.on('control-event', (eventName: string, eventData: any) => {
                     console.log(`🎮 Control event from ${socket.id}: ${eventName}`, eventData);
-                    // Forward to ALL connected clients (including the overlay and other control panels)
+                    // Forward to ALL connected clients
                     socketServer.emit(eventName, eventData);
                 });
 
-                // Your existing TikTok connection code
+                // ========== TIKTOK CONNECTION (Supports multiple streamers) ==========
                 socket.on('connect-tiktok', async (username: string) => {
+                    console.log(`📱 Client ${socket.id} connecting to TikTok: ${username}`);
                     try {
                         const result = await connectToTikTok(username);
                         socket.emit('connection-result', result);
+                        // Optional: send list of all connected streams
+                        socket.emit('connected-streams', { streams: getConnectedUsernames() });
                     } catch (error) {
                         socket.emit('connection-result', { success: false, error: 'Failed to connect' });
                     }
                 });
 
-                socket.on('disconnect-tiktok', () => {
-                    disconnectFromTikTok();
+                // Disconnect specific user or all
+                socket.on('disconnect-tiktok', async (username?: string) => {
+                    console.log(`🔌 Client ${socket.id} disconnecting from TikTok: ${username || 'all'}`);
+                    await disconnectFromTikTok(username);
+                });
+
+                // Get list of connected streams
+                socket.on('get-streams', () => {
+                    socket.emit('connected-streams', { streams: getConnectedUsernames() });
                 });
 
                 socket.on('disconnect', () => {
@@ -54,7 +63,9 @@ export async function GET(req: NextRequest) {
             setSocketIO(socketServer);
             serverStarted = true;
             
-            console.log('WebSocket server started on port 3001');
+            console.log('✅ WebSocket server started on port 3001');
+            console.log('✅ Control event forwarder active');
+            console.log('✅ Multi-stream support enabled');
         } catch (error) {
             console.log('Socket server already running or port in use');
         }

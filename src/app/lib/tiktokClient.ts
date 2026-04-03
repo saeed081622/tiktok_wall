@@ -1,10 +1,11 @@
 import { TikTokLiveConnection, WebcastEvent, WebcastGiftMessage, WebcastChatMessage, WebcastMemberMessage, ClientEventMap } from 'tiktok-live-connector';
 import { Server as SocketServer } from 'socket.io';
 
-let tiktokConnection: TikTokLiveConnection | null = null;
+// Store multiple TikTok connections keyed by username
+let tiktokConnections: Map<string, TikTokLiveConnection> = new Map();
 let io: SocketServer | null = null;
 
-// Add Battle MVP interface
+// Keep all your existing interfaces exactly as they were
 export interface BattleMVPEvent {
     type: 'battle_mvp';
     battleId?: string;
@@ -65,6 +66,7 @@ export interface GiftEvent {
     repeatCount: number;
     totalDiamonds: number;
     isStreak: boolean;
+    streamer?: string;  // NEW: identifies which streamer this gift is for
     timestamp: number;
 }
 
@@ -72,6 +74,7 @@ export interface FollowEvent {
     type: 'follow';
     username: string;
     nickname: string;
+    streamer?: string;  // NEW
     timestamp: number;
 }
 
@@ -80,6 +83,7 @@ export interface ChatEvent {
     username: string;
     nickname: string;
     comment: string;
+    streamer?: string;  // NEW
     timestamp: number;
 }
 
@@ -87,6 +91,7 @@ export interface JoinEvent {
     type: 'join';
     username: string;
     nickname: string;
+    streamer?: string;  // NEW
     timestamp: number;
 }
 
@@ -94,65 +99,22 @@ export interface SystemEvent {
     type: 'system';
     message: string;
     subType?: 'connected' | 'disconnected' | 'error';
+    streamer?: string;  // NEW
     timestamp: number;
 }
 
 export type TikTokEvent = GiftEvent | FollowEvent | ChatEvent | JoinEvent | SystemEvent | BattleMVPEvent | BattleStartEvent | BattleEndEvent;
 
-// Define proper types for TikTok data structures
-interface TikTokImage {
-    urlListList?: string[];
-    urlList?: string[];
-}
-
-interface TikTokGiftDetails {
-    giftName?: string;
-    diamondCount?: number;
-    giftType?: number;
-    icon?: TikTokImage;
-    describe?: string;
-}
-
-interface TikTokUser {
-    uniqueId?: string;
-    nickname?: string;
-}
-
-interface TikTokGiftMessage {
-    giftDetails?: TikTokGiftDetails;
-    user?: TikTokUser;
-    repeatCount?: number;
-    repeatEnd?: boolean;
-}
-
-interface TikTokFollowMessage {
-    user?: TikTokUser;
-}
-
-interface TikTokChatMessage {
-    user?: TikTokUser;
-    comment?: string;
-}
-
-interface TikTokMemberMessage {
-    user?: TikTokUser;
-}
-
-interface TikTokLikeMessage {
-    user?: TikTokUser;
-    likeCount?: number;
-    totalLikeCount?: number;
-}
-
-// Track battle state to determine MVP
+// Battle state tracking (now supports multiple streamers)
 interface BattleState {
     battleId: string;
+    streamer: string;
     users: Map<string, { username: string; nickname: string; score: number; teamId?: string }>;
     teams: Map<string, { score: number; users: string[] }>;
     lastUpdate: number;
 }
 
-const activeBattles = new Map<string, BattleState>();
+const activeBattles: Map<string, BattleState> = new Map();
 
 export function setSocketIO(socketIO: SocketServer) {
     io = socketIO;
@@ -160,43 +122,55 @@ export function setSocketIO(socketIO: SocketServer) {
 }
 
 export async function connectToTikTok(username: string): Promise<{ success: boolean; roomId?: string; error?: string }> {
-    if (tiktokConnection) {
-        tiktokConnection.disconnect();
-    }
-
     if (!username) {
         return { success: false, error: 'Username is required' };
     }
 
-    tiktokConnection = new TikTokLiveConnection(username, {
-        enableExtendedGiftInfo: true,  // Already enabled - gives gift images
-        processInitialData: false,
-        requestPollingIntervalMs: 1000
-    });
+    const cleanUsername = username.replace('@', '');
+    
+    // Check if already connected to this username
+    if (tiktokConnections.has(cleanUsername)) {
+        console.log(`✅ Already connected to ${cleanUsername}, reusing connection`);
+        return { success: true, roomId: 'existing' };
+    }
 
     try {
-        console.log(`🔄 Connecting to TikTok live: ${username}`);
-        const state = await tiktokConnection.connect();
-        console.log(`✅ Connected to TikTok Live! Room ID: ${state.roomId}`);
+        console.log(`🔄 Connecting to TikTok live: ${cleanUsername}`);
+        
+        const connection = new TikTokLiveConnection(cleanUsername, {
+            enableExtendedGiftInfo: true,
+            processInitialData: false,
+            requestPollingIntervalMs: 1000
+        });
+
+        const state = await connection.connect();
+        console.log(`✅ Connected to TikTok Live: ${cleanUsername} | Room ID: ${state.roomId}`);
+        
+        tiktokConnections.set(cleanUsername, connection);
+        setupEventListenersForConnection(connection, cleanUsername);
 
         // Broadcast connection status
         io?.emit('tiktok-event', {
             type: 'system',
             subType: 'connected',
-            message: `Connected to ${username}'s live stream`,
+            message: `Connected to @${cleanUsername}'s live stream`,
+            streamer: cleanUsername,
             timestamp: Date.now()
         } as SystemEvent);
-
-        setupEventListeners();
+        
         return { success: true, roomId: state.roomId };
+        
     } catch (error) {
-        console.error('❌ Failed to connect:', error);
+        console.error(`❌ Failed to connect to ${cleanUsername}:`, error);
+        
         io?.emit('tiktok-event', {
             type: 'system',
             subType: 'error',
-            message: 'Failed to connect to TikTok',
+            message: `Failed to connect to @${cleanUsername}`,
+            streamer: cleanUsername,
             timestamp: Date.now()
         } as SystemEvent);
+        
         return { success: false, error: 'Connection failed' };
     }
 }
@@ -204,7 +178,6 @@ export async function connectToTikTok(username: string): Promise<{ success: bool
 function getGiftImageUrl(giftDetails: any): string | undefined {
     if (!giftDetails?.icon) return undefined;
     
-    // Try different possible property names for the image URL array
     if (giftDetails.icon.urlListList && Array.isArray(giftDetails.icon.urlListList)) {
         return giftDetails.icon.urlListList[0];
     }
@@ -214,11 +187,9 @@ function getGiftImageUrl(giftDetails: any): string | undefined {
     return undefined;
 }
 
-function setupEventListeners() {
-    if (!tiktokConnection) return;
-
-    // GIFT EVENTS (unchanged - already working with images)
-    tiktokConnection.on(WebcastEvent.GIFT, (data: WebcastGiftMessage) => {
+function setupEventListenersForConnection(connection: TikTokLiveConnection, streamerName: string) {
+    // GIFT EVENTS
+    connection.on(WebcastEvent.GIFT, (data: WebcastGiftMessage) => {
         const giftDetails = data.giftDetails;
         const user = data.user;
         
@@ -233,67 +204,80 @@ function setupEventListeners() {
             repeatCount: data.repeatCount || 1,
             totalDiamonds: (giftDetails?.diamondCount || 0) * (data.repeatCount || 1),
             isStreak: giftDetails?.giftType === 1 && !data.repeatEnd,
+            streamer: streamerName,
             timestamp: Date.now()
         };
 
-        console.log(`🎁 ${giftEvent.username}: ${giftEvent.repeatCount}x ${giftEvent.giftName}`);
+        console.log(`🎁 [${streamerName}] ${giftEvent.username}: ${giftEvent.repeatCount}x ${giftEvent.giftName}`);
         io?.emit('tiktok-event', giftEvent);
     });
 
-    // FOLLOW EVENTS (unchanged)
-    tiktokConnection.on(WebcastEvent.FOLLOW, (data: any) => {
+    // FOLLOW EVENTS
+    connection.on(WebcastEvent.FOLLOW, (data: any) => {
         const followEvent: FollowEvent = {
             type: 'follow',
             username: data.user?.uniqueId || 'anonymous',
             nickname: data.user?.nickname || 'Anonymous',
+            streamer: streamerName,
             timestamp: Date.now()
         };
 
-        console.log(`➕ ${followEvent.username} followed!`);
+        console.log(`➕ [${streamerName}] ${followEvent.username} followed!`);
         io?.emit('tiktok-event', followEvent);
     });
 
-    // CHAT EVENTS (unchanged)
-    tiktokConnection.on(WebcastEvent.CHAT, (data: WebcastChatMessage) => {
+    // CHAT EVENTS
+    connection.on(WebcastEvent.CHAT, (data: WebcastChatMessage) => {
         const chatEvent: ChatEvent = {
             type: 'chat',
             username: data.user?.uniqueId || 'anonymous',
             nickname: data.user?.nickname || 'Anonymous',
             comment: data.comment || '',
+            streamer: streamerName,
             timestamp: Date.now()
         };
 
         io?.emit('tiktok-event', chatEvent);
     });
 
-    // JOIN EVENTS (unchanged)
-    tiktokConnection.on(WebcastEvent.MEMBER, (data: WebcastMemberMessage) => {
+    // JOIN EVENTS
+    connection.on(WebcastEvent.MEMBER, (data: WebcastMemberMessage) => {
         const joinEvent: JoinEvent = {
             type: 'join',
             username: data.user?.uniqueId || 'anonymous',
             nickname: data.user?.nickname || 'Anonymous',
+            streamer: streamerName,
             timestamp: Date.now()
         };
 
-        console.log(`👤 ${joinEvent.username} joined`);
+        console.log(`👤 [${streamerName}] ${joinEvent.username} joined`);
         io?.emit('tiktok-event', joinEvent);
     });
 
-    // LIKE EVENTS (unchanged)
-    tiktokConnection.on(WebcastEvent.LIKE, (data: any) => {
-        console.log(`❤️ ${data.user?.uniqueId} sent ${data.likeCount} likes`);
+    // LIKE EVENTS
+    connection.on(WebcastEvent.LIKE, (data: any) => {
+        console.log(`❤️ [${streamerName}] ${data.user?.uniqueId} sent ${data.likeCount} likes`);
+        io?.emit('tiktok-event', {
+            type: 'like',
+            username: data.user?.uniqueId || 'anonymous',
+            nickname: data.user?.nickname || 'Anonymous',
+            count: data.likeCount || 1,
+            total: data.totalLikeCount || 0,
+            streamer: streamerName,
+            timestamp: Date.now()
+        });
     });
 
-    // ========== NEW: BATTLE START EVENT ==========
-    tiktokConnection.on(WebcastEvent.LINK_MIC_BATTLE, (data: any) => {
-        console.log('⚔️ Battle started!', data);
+    // BATTLE START
+    connection.on(WebcastEvent.LINK_MIC_BATTLE, (data: any) => {
+        console.log(`⚔️ [${streamerName}] Battle started!`);
         
         const battleUsers = data.battleUsers || [];
-        const battleId = data.battleId || `battle_${Date.now()}`;
+        const battleId = `${streamerName}_${data.battleId || Date.now()}`;
         
-        // Initialize battle state
         const battleState: BattleState = {
             battleId: battleId,
+            streamer: streamerName,
             users: new Map(),
             teams: new Map(),
             lastUpdate: Date.now()
@@ -325,68 +309,67 @@ function setupEventListeners() {
             timestamp: Date.now()
         };
         
-        io?.emit('tiktok-event', battleStartEvent);
+        io?.emit('tiktok-event', { ...battleStartEvent, streamer: streamerName });
     });
 
-    // ========== NEW: BATTLE UPDATE EVENT (MVP tracking) ==========
-    tiktokConnection.on(WebcastEvent.LINK_MIC_ARMIES, (data: any) => {
+    // BATTLE UPDATE
+    connection.on(WebcastEvent.LINK_MIC_ARMIES, (data: any) => {
         const battleId = data.battleId;
         
         if (!battleId) {
-            // Try to find active battle
             const activeBattleIds = Array.from(activeBattles.keys());
-            if (activeBattleIds.length === 0) return;
-            const currentBattleId = activeBattleIds[activeBattleIds.length - 1];
-            updateBattleState(currentBattleId, data);
+            const matchingBattle = activeBattleIds.find(id => id.startsWith(streamerName));
+            if (matchingBattle) {
+                updateBattleState(matchingBattle, data);
+            }
         } else {
-            updateBattleState(battleId, data);
+            const fullBattleId = `${streamerName}_${battleId}`;
+            updateBattleState(fullBattleId, data);
         }
     });
 
-    // DISCONNECT EVENT
-    tiktokConnection.on('disconnected' as keyof ClientEventMap, () => {
-        console.log('🔌 Disconnected from TikTok');
-        // Clear active battles
-        activeBattles.clear();
+    // DISCONNECT
+    connection.on('disconnected' as keyof ClientEventMap, () => {
+        console.log(`🔌 [${streamerName}] Disconnected from TikTok`);
+        tiktokConnections.delete(streamerName);
+        
+        // Clean up battles for this streamer
+        for (const [battleId, battleState] of activeBattles) {
+            if (battleState.streamer === streamerName) {
+                activeBattles.delete(battleId);
+            }
+        }
+        
         io?.emit('tiktok-event', {
             type: 'system',
             subType: 'disconnected',
-            message: 'Disconnected from TikTok',
+            message: `Disconnected from @${streamerName}'s live`,
+            streamer: streamerName,
             timestamp: Date.now()
         } as SystemEvent);
     });
 
-    // ERROR EVENT
-    tiktokConnection.on('error' as keyof ClientEventMap, (error: Error) => {
-        console.error('❌ TikTok connection error:', error);
+    // ERROR
+    connection.on('error' as keyof ClientEventMap, (error: Error) => {
+        console.error(`❌ [${streamerName}] TikTok connection error:`, error);
         io?.emit('tiktok-event', {
             type: 'system',
             subType: 'error',
-            message: 'TikTok connection error',
+            message: `Error on @${streamerName}'s stream`,
+            streamer: streamerName,
             timestamp: Date.now()
         } as SystemEvent);
     });
 }
 
-// Helper function to update battle state and emit MVP updates
 function updateBattleState(battleId: string, data: any) {
     let battleState = activeBattles.get(battleId);
     
     if (!battleState) {
-        // Create new battle state if not exists
-        battleState = {
-            battleId: battleId,
-            users: new Map(),
-            teams: new Map(),
-            lastUpdate: Date.now()
-        };
-        activeBattles.set(battleId, battleState);
+        return;
     }
     
     battleState.lastUpdate = Date.now();
-    
-    // Parse armies data to get scores
-    // Structure varies based on battle type (1v1, team battle, etc.)
     
     // Handle team battles
     if (data.teamArmies && Array.isArray(data.teamArmies)) {
@@ -400,7 +383,6 @@ function updateBattleState(battleId: string, data: any) {
             const teamInfo = battleState.teams.get(teamId)!;
             teamInfo.score = teamTotalScore;
             
-            // Parse individual user scores
             if (team.userArmies?.userArmy && Array.isArray(team.userArmies.userArmy)) {
                 for (const user of team.userArmies.userArmy) {
                     const userId = user.userId;
@@ -421,7 +403,6 @@ function updateBattleState(battleId: string, data: any) {
                     userInfo.score = score;
                     userInfo.nickname = nickname;
                     
-                    // Add to team users list if not already
                     if (!teamInfo.users.includes(userId)) {
                         teamInfo.users.push(userId);
                     }
@@ -430,28 +411,7 @@ function updateBattleState(battleId: string, data: any) {
         }
     }
     
-    // Handle 1v1 battles (older format)
-    if (data.battleItems) {
-        for (const [userId, userData] of Object.entries(data.battleItems)) {
-            const userArmies = (userData as any).userArmy;
-            if (userArmies && Array.isArray(userArmies)) {
-                for (const army of userArmies) {
-                    const score = parseInt(army.score || '0');
-                    if (!battleState.users.has(army.userId)) {
-                        battleState.users.set(army.userId, {
-                            username: army.userId,
-                            nickname: army.nickname || army.userId,
-                            score: 0
-                        });
-                    }
-                    const userInfo = battleState.users.get(army.userId)!;
-                    userInfo.score += score;
-                }
-            }
-        }
-    }
-    
-    // Find current MVP (highest score)
+    // Find current MVP
     let currentMVP: { userId: string; username: string; nickname: string; score: number; teamId?: string } | null = null;
     let highestScore = -1;
     
@@ -468,7 +428,6 @@ function updateBattleState(battleId: string, data: any) {
         }
     }
     
-    // Emit MVP update if there's a current leader
     if (currentMVP && currentMVP.score > 0) {
         const mvpEvent: BattleMVPEvent = {
             type: 'battle_mvp',
@@ -481,20 +440,16 @@ function updateBattleState(battleId: string, data: any) {
             timestamp: Date.now()
         };
         
-        console.log(`🏆 Current MVP: ${currentMVP.nickname} with ${currentMVP.score} points`);
-        io?.emit('tiktok-event', mvpEvent);
+        console.log(`🏆 [${battleState.streamer}] Current MVP: ${currentMVP.nickname} with ${currentMVP.score} points`);
+        io?.emit('tiktok-event', { ...mvpEvent, streamer: battleState.streamer });
     }
     
-    // Check if battle ended (score gap or time-based - we can detect from data)
-    // Some battle end events might come through LINK_MIC_BATTLE with action 'finish'
     if (data.action === 'finish' || data.battleStatus === 'finished') {
         emitBattleEnd(battleId, battleState);
     }
 }
 
-// Helper to emit battle end event with final MVP
 function emitBattleEnd(battleId: string, battleState: BattleState) {
-    // Find final MVP
     let finalMVP: { userId: string; username: string; nickname: string; score: number; teamId?: string } | null = null;
     let highestScore = -1;
     let allScores: Array<{ userId: string; username: string; nickname: string; score: number }> = [];
@@ -519,13 +474,11 @@ function emitBattleEnd(battleId: string, battleState: BattleState) {
         }
     }
     
-    // Find winner (team with highest score)
     let winner: { userId: string; username: string; nickname: string } | null = null;
     let highestTeamScore = -1;
     for (const [teamId, teamInfo] of battleState.teams) {
         if (teamInfo.score > highestTeamScore) {
             highestTeamScore = teamInfo.score;
-            // Get first user from winning team as representative
             const winnerUserId = teamInfo.users[0];
             const winnerInfo = battleState.users.get(winnerUserId);
             if (winnerInfo) {
@@ -547,19 +500,62 @@ function emitBattleEnd(battleId: string, battleState: BattleState) {
         timestamp: Date.now()
     };
     
-    console.log(`🏁 Battle ended! MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
-    io?.emit('tiktok-event', battleEndEvent);
+    console.log(`🏁 [${battleState.streamer}] Battle ended! MVP: ${finalMVP?.nickname} with ${finalMVP?.score} points`);
+    io?.emit('tiktok-event', { ...battleEndEvent, streamer: battleState.streamer });
     
-    // Clean up
     activeBattles.delete(battleId);
 }
 
-export function disconnectFromTikTok() {
-    if (tiktokConnection) {
-        tiktokConnection.disconnect();
-        tiktokConnection = null;
-        // Clear active battles
+// ========== HELPER FUNCTIONS ==========
+
+export function isTikTokConnected(username?: string): boolean {
+    if (username) {
+        return tiktokConnections.has(username);
+    }
+    return tiktokConnections.size > 0;
+}
+
+export function getConnectedUsernames(): string[] {
+    return Array.from(tiktokConnections.keys());
+}
+
+export async function disconnectFromTikTok(username?: string) {
+    if (username) {
+        const connection = tiktokConnections.get(username);
+        if (connection) {
+            connection.disconnect();
+            tiktokConnections.delete(username);
+            console.log(`🔌 Disconnected from ${username}`);
+            
+            // Clean up battles for this streamer
+            for (const [battleId, battleState] of activeBattles) {
+                if (battleState.streamer === username) {
+                    activeBattles.delete(battleId);
+                }
+            }
+            
+            io?.emit('tiktok-event', {
+                type: 'system',
+                subType: 'disconnected',
+                message: `Disconnected from @${username}'s live`,
+                streamer: username,
+                timestamp: Date.now()
+            } as SystemEvent);
+        }
+    } else {
+        // Disconnect all
+        for (const [name, connection] of tiktokConnections) {
+            connection.disconnect();
+            console.log(`🔌 Disconnected from ${name}`);
+        }
+        tiktokConnections.clear();
         activeBattles.clear();
-        console.log('🔌 Disconnected from TikTok');
+        
+        io?.emit('tiktok-event', {
+            type: 'system',
+            subType: 'disconnected',
+            message: 'Disconnected from all streams',
+            timestamp: Date.now()
+        } as SystemEvent);
     }
 }
